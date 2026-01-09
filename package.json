@@ -1,12 +1,33 @@
 {
-  "name": "@opencode-ai/plugin-inbox",
+  "name": "@spoons-and-mirrors/iam",
   "version": "0.1.0",
-  "description": "Subagent inter-session messaging via inbox files",
+  "description": "Inter-agent messaging for OpenCode parallel subagents",
   "type": "module",
-  "main": "index.ts",
-  "scripts": {
-    "typecheck": "bun run tsc --noEmit"
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun build ./index.ts --outdir ./dist --target node --format esm --external '@opencode-ai/plugin' && tsc --emitDeclarationOnly",
+    "prepublishOnly": "bun run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "inter-agent",
+    "messaging",
+    "subagent"
+  ],
+  "license": "MIT",
   "peerDependencies": {
     "@opencode-ai/plugin": ">=0.13.7"
   },

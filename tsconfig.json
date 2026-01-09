@@ -7,10 +7,11 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": true,
+    "declarationMap": true,
     "outDir": "dist",
     "rootDir": ".",
     "types": ["bun-types"]
   },
-  "include": ["*.ts", "lib/**/*.ts"],
+  "include": ["index.ts", "prompt.ts", "logger.ts"],
   "exclude": ["node_modules", "dist"]
 }

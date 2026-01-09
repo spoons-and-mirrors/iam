@@ -1,0 +1,14 @@
+# Source files (we publish dist/)
+*.ts
+!*.d.ts
+
+# Config
+tsconfig.json
+.gitignore
+
+# Dev/logs
+.logs/
+node_modules/
+
+# Docs (optional - remove these lines if you want them in the package)
+PROGRESS.md
