@@ -1,0 +1,19 @@
+{
+  "name": "@opencode-ai/plugin-inbox",
+  "version": "0.1.0",
+  "description": "Subagent inter-session messaging via inbox files",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "typecheck": "bun run tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=0.13.7"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.143",
+    "@types/node": "^24.10.1",
+    "bun-types": "^1.3.5",
+    "typescript": "^5.9.3"
+  }
+}
