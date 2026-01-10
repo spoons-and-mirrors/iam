@@ -39,6 +39,12 @@ const aliasToSession = new Map<string, string>()
 const agentDescriptions = new Map<string, string>() // alias -> description
 let nextAgentIndex = 0
 
+// Track which sessions have received IAM instructions
+const instructedSessions = new Set<string>()
+
+// Cache for parentID lookups
+const sessionParentCache = new Map<string, string | null>()
+
 function getNextAlias(): string {
   const letter = String.fromCharCode(65 + (nextAgentIndex % 26)) // A-Z
   const suffix = nextAgentIndex >= 26 ? Math.floor(nextAgentIndex / 26).toString() : ""
@@ -147,11 +153,35 @@ function registerSession(sessionId: string): void {
 }
 
 // ============================================================================
+// Session utils
+// ============================================================================
+
+async function getParentId(client: any, sessionId: string): Promise<string | null> {
+  // Check cache first
+  if (sessionParentCache.has(sessionId)) {
+    return sessionParentCache.get(sessionId)!
+  }
+  
+  try {
+    const response = await client.session.get({ path: { id: sessionId } })
+    const parentId = response.data?.parentID || null
+    sessionParentCache.set(sessionId, parentId)
+    log.debug(LOG.SESSION, `Looked up parentID`, { sessionId, parentId })
+    return parentId
+  } catch (e) {
+    log.warn(LOG.SESSION, `Failed to get session info`, { sessionId, error: String(e) })
+    sessionParentCache.set(sessionId, null)
+    return null
+  }
+}
+
+// ============================================================================
 // Plugin
 // ============================================================================
 
-const plugin: Plugin = async () => {
+const plugin: Plugin = async (ctx) => {
   log.info(LOG.HOOK, "Plugin initialized")
+  const client = ctx.client
   
   return {
     tool: {
@@ -255,11 +285,9 @@ const plugin: Plugin = async () => {
     
     // Register subagents when task tool completes
     "tool.execute.after": async (input, output) => {
-      // Log ALL tool.execute.after calls to debug
       log.debug(LOG.HOOK, `tool.execute.after fired`, { tool: input.tool, sessionID: input.sessionID, hasMetadata: !!output.metadata })
       
       if (input.tool === "task") {
-        // Log full metadata to see what's available
         log.debug(LOG.HOOK, `task metadata`, { metadata: output.metadata, output: output.output?.substring?.(0, 200) })
         
         const newSessionId = (output.metadata?.sessionId || output.metadata?.session_id) as string | undefined
@@ -272,12 +300,27 @@ const plugin: Plugin = async () => {
       }
     },
     
-    // Inject system prompt with iam instructions
-    "experimental.chat.system.transform": async (_input, output) => {
+    // Inject IAM instructions into system prompt for child sessions only
+    "experimental.chat.system.transform": async (input, output) => {
+      const sessionId = (input as any).sessionID as string | undefined
+      if (!sessionId) {
+        log.debug(LOG.INJECT, `No sessionID in system.transform input, skipping`)
+        return
+      }
+      
+      // Check if this is a child session (has parentID)
+      const parentId = await getParentId(client, sessionId)
+      if (!parentId) {
+        log.debug(LOG.INJECT, `Skipping system prompt injection for main session (no parentID)`, { sessionId })
+        return
+      }
+      
+      // This is a child session - inject IAM instructions
       output.system.push(SYSTEM_PROMPT)
+      log.info(LOG.INJECT, `Injected IAM system prompt for child session`, { sessionId, parentId })
     },
     
-    // Inject urgent notification when there are unread messages
+    // Inject urgent notifications for unread messages
     "experimental.chat.messages.transform": async (_input, output) => {
       const lastUserMsg = [...output.messages].reverse().find(m => m.info.role === "user")
       if (!lastUserMsg) return
@@ -288,9 +331,8 @@ const plugin: Plugin = async () => {
       if (unread.length === 0) return
       
       log.info(LOG.INJECT, `Injecting urgent notification`, { sessionId, unreadCount: unread.length })
-      const notification = urgentNotification(unread.length)
       
-      // Create synthetic user message
+      // Create synthetic user message with notification
       const syntheticMessage = {
         info: {
           id: "msg_iam_" + Date.now(),
@@ -306,7 +348,7 @@ const plugin: Plugin = async () => {
             sessionID: sessionId,
             messageID: "msg_iam_" + Date.now(),
             type: "text" as const,
-            text: notification,
+            text: urgentNotification(unread.length),
           }
         ]
       }

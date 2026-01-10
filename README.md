@@ -17,6 +17,8 @@ When an agent announces, the response shows all other parallel agents — whethe
 
 When an agent completes their task, they're encouraged to broadcast a completion message so others know.
 
+The plugin injects IAM instructions into the **system prompt** for child sessions only (sessions with a `parentID`).
+
 ## Actions
 
 | Action | Description |
@@ -38,4 +40,3 @@ action="broadcast", message="Found a bug in config.ts, heads up"
 action="broadcast", to="agentA", message="Can you check auth.ts?"
 action="broadcast", to="agentA,agentC", message="Sync up on API changes"
 ```
-
