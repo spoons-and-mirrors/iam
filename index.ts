@@ -3,20 +3,15 @@ import { tool } from "@opencode-ai/plugin"
 import {
   TOOL_DESCRIPTION,
   ARG_DESCRIPTIONS,
-  SESSIONS_EMPTY,
   sessionsResult,
-  READ_EMPTY,
   readResult,
-  WRITE_MISSING_TO,
-  WRITE_MISSING_MESSAGE,
-  ANNOUNCE_MISSING_MESSAGE,
+  BROADCAST_MISSING_MESSAGE,
   announceResult,
-  writeUnknownRecipient,
-  writeResult,
+  broadcastUnknownRecipient,
+  broadcastResult,
   unknownAction,
   SYSTEM_PROMPT,
   urgentNotification,
-  type ParallelAgent,
 } from "./prompt"
 import { log, LOG } from "./logger"
 
@@ -64,6 +59,11 @@ function setDescription(sessionId: string, description: string): void {
 
 function getDescription(alias: string): string | undefined {
   return agentDescriptions.get(alias)
+}
+
+function hasAnnounced(sessionId: string): boolean {
+  const alias = getAlias(sessionId)
+  return agentDescriptions.has(alias)
 }
 
 function resolveAlias(aliasOrSessionId: string): string | undefined {
@@ -130,6 +130,13 @@ function getKnownAgents(sessionId: string): string[] {
   return agents
 }
 
+function getParallelAgents(sessionId: string) {
+  return getKnownAgents(sessionId).map(alias => ({
+    alias,
+    description: getDescription(alias)
+  }))
+}
+
 function registerSession(sessionId: string): void {
   if (!activeSessions.has(sessionId)) {
     activeSessions.add(sessionId)
@@ -152,7 +159,7 @@ const plugin: Plugin = async () => {
       iam: tool({
         description: TOOL_DESCRIPTION,
         args: {
-          action: tool.schema.enum(["sessions", "read", "write", "announce"]).describe(
+          action: tool.schema.enum(["sessions", "read", "broadcast", "announce"]).describe(
             ARG_DESCRIPTIONS.action
           ),
           to: tool.schema.string().optional().describe(
@@ -168,79 +175,80 @@ const plugin: Plugin = async () => {
           // Register this session on first iam use
           registerSession(sessionId)
           
-          log.debug(LOG.TOOL, `iam action: ${args.action}`, { sessionId, args })
+          const alias = getAlias(sessionId)
+          const announced = hasAnnounced(sessionId)
+          
+          log.debug(LOG.TOOL, `iam action: ${args.action}`, { sessionId, alias, args })
           
           switch (args.action) {
             case "sessions": {
-              const agents = getKnownAgents(sessionId)
-              log.debug(LOG.TOOL, `sessions result`, { sessionId, agentCount: agents.length, agents })
-              
-              if (agents.length === 0) {
-                return SESSIONS_EMPTY
-              }
-              
-              // Build agent list with descriptions
-              const agentsWithDesc = agents.map(alias => ({
-                alias,
-                description: getDescription(alias)
-              }))
-              
-              return sessionsResult(agentsWithDesc)
+              const agents = getParallelAgents(sessionId)
+              log.debug(LOG.TOOL, `sessions result`, { alias, agentCount: agents.length })
+              return sessionsResult(alias, agents, announced)
             }
             
             case "read": {
               const messages = getAllMessages(sessionId)
               const unreadCount = messages.filter(m => !m.read).length
-              log.debug(LOG.TOOL, `read iam`, { sessionId, total: messages.length, unread: unreadCount })
+              log.debug(LOG.TOOL, `read inbox`, { alias, total: messages.length, unread: unreadCount })
               
               // Mark all as read
               markAllRead(sessionId)
               
-              if (messages.length === 0) {
-                return READ_EMPTY
-              }
-              
-              return readResult(messages, unreadCount)
+              return readResult(alias, messages, unreadCount, announced)
             }
             
-            case "write": {
-              if (!args.to) {
-                log.warn(LOG.TOOL, `write missing 'to'`, { sessionId })
-                return WRITE_MISSING_TO
-              }
+            case "broadcast": {
               if (!args.message) {
-                log.warn(LOG.TOOL, `write missing 'message'`, { sessionId })
-                return WRITE_MISSING_MESSAGE
+                log.warn(LOG.TOOL, `broadcast missing 'message'`, { alias })
+                return BROADCAST_MISSING_MESSAGE
               }
               
-              // Resolve alias to session ID
-              const recipientSessionId = resolveAlias(args.to)
-              if (!recipientSessionId) {
-                log.warn(LOG.TOOL, `write unknown recipient`, { sessionId, to: args.to })
-                return writeUnknownRecipient(args.to, getKnownAgents(sessionId))
+              const knownAgents = getKnownAgents(sessionId)
+              let targetAliases: string[]
+              
+              // Determine recipients
+              if (!args.to || args.to.toLowerCase() === "all") {
+                // Broadcast to all
+                targetAliases = knownAgents
+              } else {
+                // Parse comma-separated list
+                targetAliases = args.to.split(",").map(s => s.trim()).filter(Boolean)
               }
               
-              // Store sender's alias (not session ID) so recipient sees friendly name
-              const senderAlias = getAlias(sessionId)
-              const msg = sendMessage(senderAlias, recipientSessionId, args.message)
+              if (targetAliases.length === 0) {
+                return `No agents to broadcast to. Use action="sessions" to see available agents.`
+              }
               
-              return writeResult(args.to, msg.id)
+              // Resolve all aliases and validate
+              const recipientSessions: string[] = []
+              for (const targetAlias of targetAliases) {
+                const recipientSessionId = resolveAlias(targetAlias)
+                if (!recipientSessionId) {
+                  log.warn(LOG.TOOL, `broadcast unknown recipient`, { alias, to: targetAlias })
+                  return broadcastUnknownRecipient(targetAlias, knownAgents)
+                }
+                recipientSessions.push(recipientSessionId)
+              }
+              
+              // Send to all recipients
+              let messageId = ""
+              for (const recipientSessionId of recipientSessions) {
+                const msg = sendMessage(alias, recipientSessionId, args.message)
+                messageId = msg.id // Use last message ID
+              }
+              
+              return broadcastResult(targetAliases, messageId)
             }
             
             case "announce": {
               if (!args.message) {
-                log.warn(LOG.TOOL, `announce missing 'message'`, { sessionId })
-                return ANNOUNCE_MISSING_MESSAGE
+                log.warn(LOG.TOOL, `announce missing 'message'`, { alias })
+                return `Error: 'message' parameter is required for action="announce". Describe what you're working on.`
               }
               
               setDescription(sessionId, args.message)
-              const alias = getAlias(sessionId)
-              
-              // Gather info about all parallel agents
-              const parallelAgents = getKnownAgents(sessionId).map(agentAlias => ({
-                alias: agentAlias,
-                description: getDescription(agentAlias)
-              }))
+              const parallelAgents = getParallelAgents(sessionId)
               
               return announceResult(alias, parallelAgents)
             }

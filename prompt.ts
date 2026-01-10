@@ -5,108 +5,133 @@
 export const TOOL_DESCRIPTION = `Inter-agent messaging. Use this to communicate with other parallel agents (task tools).
 
 Actions:
-- "sessions": Show agents you can message (e.g., agentA, agentB)
-- "read": Read all your messages (marks them as read)
-- "write": Send a message (requires 'to' and 'message' parameters)
-- "announce": Announce what you're working on (requires 'message' parameter)`;
+- "announce": Announce what you're working on (do this first!). You can re-announce to update your status.
+- "sessions": Show all parallel agents and what they're doing
+- "read": Read your messages (marks them as read)
+- "broadcast": Send a message (requires 'message', optional 'to')`;
 
 export const ARG_DESCRIPTIONS = {
   action: "Action to perform",
-  to: "Recipient agent name, e.g. 'agentA' (required for 'write')",
-  message: "Message content (required for 'write'), or self-description (required for 'announce')",
+  to: "Recipient(s): 'agentA', 'agentA,agentC', or 'all' (default: all)",
+  message: "Your announcement or message content",
 } as const;
 
 // =============================================================================
-// Tool output messages
+// Types
 // =============================================================================
-
-export const SESSIONS_EMPTY = `No other agents available yet.
-
-Agents will appear here when:
-- Parallel tasks are spawned by the same parent
-- Another agent sends you a message`;
-
-export function sessionsResult(agents: {alias: string; description?: string}[]): string {
-  const lines = [`Agents you can message:\n`]
-  for (const agent of agents) {
-    if (agent.description) {
-      lines.push(`- ${agent.alias}: ${agent.description}`)
-    } else {
-      lines.push(`- ${agent.alias}`)
-    }
-  }
-  lines.push(``)
-  lines.push(`To send: use action="write" with to="<agent>" and message="..."`)
-  return lines.join("\n")
-}
-
-export const READ_EMPTY = `No messages in your IAM inbox.`;
-
-export function readResult(
-  messages: {from: string; body: string; timestamp: number; read: boolean}[],
-  unreadCount: number
-): string {
-  const lines = [`Your IAM inbox (${unreadCount} were unread):\n`, `---`];
-
-  for (const msg of messages) {
-    const time = new Date(msg.timestamp).toISOString();
-    const status = msg.read ? "" : " [NEW]";
-    lines.push(`[${time}] From: ${msg.from}${status}`);
-    lines.push(msg.body);
-    lines.push(`---`);
-  }
-
-  lines.push(``);
-  lines.push(
-    `To reply: use action="write" with to="<sender>" and message="..."`
-  );
-
-  return lines.join("\n");
-}
-
-export const WRITE_MISSING_TO = `Error: 'to' parameter is required for action="write".`;
-export const WRITE_MISSING_MESSAGE = `Error: 'message' parameter is required for action="write".`;
-export const ANNOUNCE_MISSING_MESSAGE = `Error: 'message' parameter is required for action="announce". Describe what you're working on.`;
 
 export interface ParallelAgent {
   alias: string;
   description?: string;
 }
 
-export function announceResult(alias: string, parallelAgents: ParallelAgent[]): string {
-  const lines = [`Announced! Other agents will see your description when they list sessions.`, ``, `You are: ${alias}`];
-  
-  if (parallelAgents.length > 0) {
-    lines.push(``);
-    lines.push(`--- Parallel Agents ---`);
-    for (const agent of parallelAgents) {
-      if (agent.description) {
-        lines.push(`• ${agent.alias} is working on: ${agent.description}`);
-      } else {
-        lines.push(`• ${agent.alias} is running (hasn't announced yet)`);
-      }
+// =============================================================================
+// Tool output messages
+// =============================================================================
+
+export function formatAgentList(agents: ParallelAgent[]): string[] {
+  const lines: string[] = [];
+  for (const agent of agents) {
+    if (agent.description) {
+      lines.push(`• ${agent.alias} is working on: ${agent.description}`);
+    } else {
+      lines.push(`• ${agent.alias} is running (hasn't announced yet)`);
     }
-    lines.push(``);
-    lines.push(`Use action="write" to coordinate with them if needed.`);
   }
-  
+  return lines;
+}
+
+export function sessionsResult(
+  alias: string,
+  agents: ParallelAgent[],
+  hasAnnounced: boolean
+): string {
+  const lines = [`You are: ${alias}`, ``];
+
+  if (agents.length === 0) {
+    lines.push(`No other agents running yet.`);
+    lines.push(``);
+    lines.push(`Agents will appear here when parallel tasks are spawned.`);
+  } else {
+    lines.push(`--- Parallel Agents ---`);
+    lines.push(...formatAgentList(agents));
+    lines.push(``);
+    lines.push(`Use action="broadcast" to coordinate with them.`);
+  }
+
+  if (!hasAnnounced) {
+    lines.push(``);
+    lines.push(`Tip: Use action="announce" to let others know what you're doing.`);
+  }
+
   return lines.join("\n");
 }
 
-export function writeUnknownRecipient(to: string, known: string[]): string {
-  const list =
-    known.length > 0
-      ? `Known agents: ${known.join(", ")}`
-      : "No agents available yet.";
+export function readResult(
+  alias: string,
+  messages: { from: string; body: string; timestamp: number; read: boolean }[],
+  unreadCount: number,
+  hasAnnounced: boolean
+): string {
+  const lines = [`You are: ${alias}`, ``];
+
+  if (messages.length === 0) {
+    lines.push(`No messages in your inbox.`);
+  } else {
+    lines.push(`Your inbox (${unreadCount} were unread):`, `---`);
+
+    for (const msg of messages) {
+      const time = new Date(msg.timestamp).toISOString();
+      const status = msg.read ? "" : " [NEW]";
+      lines.push(`[${time}] From: ${msg.from}${status}`);
+      lines.push(msg.body);
+      lines.push(`---`);
+    }
+
+    lines.push(``);
+    lines.push(`To reply: use action="broadcast" with to="<sender>" and message="..."`);
+  }
+
+  if (!hasAnnounced) {
+    lines.push(``);
+    lines.push(`Tip: Use action="announce" to let others know what you're doing.`);
+  }
+
+  return lines.join("\n");
+}
+
+export function announceResult(alias: string, parallelAgents: ParallelAgent[]): string {
+  const lines = [
+    `Announced! Other agents will see your description when they list sessions.`,
+    ``,
+    `You are: ${alias}`,
+  ];
+
+  if (parallelAgents.length > 0) {
+    lines.push(``);
+    lines.push(`--- Parallel Agents ---`);
+    lines.push(...formatAgentList(parallelAgents));
+    lines.push(``);
+    lines.push(`Use action="broadcast" to coordinate with them.`);
+  }
+
+  return lines.join("\n");
+}
+
+export const BROADCAST_MISSING_MESSAGE = `Error: 'message' parameter is required for action="broadcast".`;
+
+export function broadcastUnknownRecipient(to: string, known: string[]): string {
+  const list = known.length > 0 ? `Known agents: ${known.join(", ")}` : "No agents available yet.";
   return `Error: Unknown recipient "${to}". ${list}`;
 }
 
-export function writeResult(to: string, messageId: string): string {
-  return `Message sent!\n\nTo: ${to}\nMessage ID: ${messageId}\n\nThe recipient will be notified.`;
+export function broadcastResult(recipients: string[], messageId: string): string {
+  const recipientStr = recipients.length === 1 ? recipients[0] : recipients.join(", ");
+  return `Message sent!\n\nTo: ${recipientStr}\nMessage ID: ${messageId}\n\nRecipients will be notified.`;
 }
 
 export function unknownAction(action: string): string {
-  return `Unknown action: ${action}`;
+  return `Unknown action: ${action}. Valid actions: announce, sessions, read, broadcast`;
 }
 
 // =============================================================================
@@ -121,12 +146,16 @@ You have access to an \`iam\` tool for communicating with other parallel agents.
 
 Usage:
 - action="announce", message="..." - Announce what you're working on (do this first!)
-- action="sessions" - See other agents and what they're working on
+- action="sessions" - See other agents and what they're doing
 - action="read" - Read your messages
-- action="write", to="agentA", message="..." - Send a message
+- action="broadcast", message="..." - Message all agents
+- action="broadcast", to="agentA", message="..." - Message specific agent(s)
 
 At the start of your task, use announce to let other agents know what you're doing.
+You can re-announce to update your status as your task evolves.
 Check your inbox when notified about new messages.
+
+When you complete your task, broadcast to all: "Done. Here's what I found/did: ..."
 </instructions>
 `;
 
