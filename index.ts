@@ -127,6 +127,29 @@ function markAllRead(sessionId: string): void {
   log.info(LOG.MESSAGE, `Marked all read`, { sessionId, count: unreadCount })
 }
 
+// Mark messages FROM a specific sender as read (when responding to them)
+function markMessagesFromSenderAsRead(sessionId: string, senderSessionId: string): void {
+  const inbox = getInbox(sessionId)
+  let count = 0
+  for (const msg of inbox) {
+    // msg.from is the alias, we need to check by session ID
+    // The message stores the recipient session ID, but we need sender session ID
+    // Actually, messages are stored in recipient's inbox with 'from' being sender's alias
+    // We need to find messages where the sender's session matches
+    if (!msg.read) {
+      // Check if this message came from the sender we're responding to
+      const senderAlias = getAlias(senderSessionId)
+      if (msg.from === senderAlias) {
+        msg.read = true
+        count++
+      }
+    }
+  }
+  if (count > 0) {
+    log.info(LOG.MESSAGE, `Marked messages from sender as read`, { sessionId, senderSessionId, count })
+  }
+}
+
 function getKnownAgents(sessionId: string): string[] {
   // Return aliases of all active sessions except self
   const agents: string[] = []
@@ -254,6 +277,9 @@ const plugin: Plugin = async (ctx) => {
               for (const recipientSessionId of recipientSessions) {
                 const msg = sendMessage(alias, recipientSessionId, args.message)
                 messageId = msg.id // Use last message ID
+                
+                // Mark messages FROM this recipient as read (since we're responding to them)
+                markMessagesFromSenderAsRead(sessionId, recipientSessionId)
               }
               
               // Check if we're broadcasting to our parent session - if so, wake it up
