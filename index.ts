@@ -336,16 +336,9 @@ const plugin: Plugin = async (ctx) => {
         return
       }
       
-      // Check if this is a child session (has parentID)
-      const parentId = await getParentId(client, sessionId)
-      if (!parentId) {
-        log.debug(LOG.INJECT, `Skipping system prompt injection for main session (no parentID)`, { sessionId })
-        return
-      }
-      
-      // This is a child session - inject IAM instructions
+      // Inject IAM instructions for all sessions
       output.system.push(SYSTEM_PROMPT)
-      log.info(LOG.INJECT, `Injected IAM system prompt for child session`, { sessionId, parentId })
+      log.info(LOG.INJECT, `Injected IAM system prompt`, { sessionId })
     },
     
     // Inject urgent notifications for unread messages
