@@ -2,17 +2,9 @@
 // All LLM-facing prompts for the iam plugin
 // =============================================================================
 
-export const TOOL_DESCRIPTION = `Inter-agent messaging. Use this to communicate with other parallel agents (task tools).
+export const ANNOUNCE_DESCRIPTION = `Announce what you're working on to other parallel agents. Use this first to let others know what you're doing and see all parallel agents. You can re-announce to update your status.`;
 
-Actions:
-- "announce": Announce what you're working on (do this first!). Shows all parallel agents. You can re-announce to update your status.
-- "broadcast": Send a message (requires 'message', optional 'to')`;
-
-export const ARG_DESCRIPTIONS = {
-  action: "Action to perform",
-  to: "Recipient(s): 'agentA', 'agentA,agentC', or 'all' (default: all)",
-  message: "Your announcement or message content",
-} as const;
+export const BROADCAST_DESCRIPTION = `Send a message to other parallel agents. Use 'to' for specific agent(s), or omit for all.`;
 
 // =============================================================================
 // Types
@@ -72,9 +64,7 @@ export function broadcastResult(recipients: string[], messageId: string): string
   return `Message sent!\n\nTo: ${recipientStr}\nMessage ID: ${messageId}\n\nRecipients will be notified.`;
 }
 
-export function unknownAction(action: string): string {
-  return `Unknown action: ${action}. Valid actions: announce, read, broadcast`;
-}
+
 
 // =============================================================================
 // System prompt injection
@@ -84,13 +74,13 @@ export const SYSTEM_PROMPT = `
 <instructions tool="iam">
 # Inter-Agent Messaging
 
-You have access to an \`iam\` tool for communicating with other parallel agents.
+You have access to \`announce\` and \`broadcast\` tools for communicating with other parallel agents.
 
 Usage:
-- action="announce", message="..." - Announce what you're working on (do this first!)
-- action="read" - Read your messages
-- action="broadcast", message="..." - Message all agents
-- action="broadcast", to="agentA", message="..." - Message specific agent(s)
+- announce(message="...") - Announce what you're working on (do this first!)
+- broadcast(message="...") - Message all agents
+- broadcast(to="agentA", message="...") - Message specific agent(s)
+- broadcast(to="agentA,agentC", message="...") - Message multiple agents
 
 At the start of your task, use announce to let other agents know what you're doing.
 You can re-announce to update your status as your task evolves.
@@ -123,7 +113,7 @@ export function urgentNotification(messages: UnreadMessage[]): string {
     lines.push(``);
   }
   
-  lines.push(`Respond NOW using: iam tool with action="broadcast", to="<sender>", message="<your response>"`);
+  lines.push(`Respond NOW using: broadcast tool with to="<sender>", message="<your response>"`);
   lines.push(`</system-reminder>`);
   
   return lines.join("\n");

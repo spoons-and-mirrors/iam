@@ -1,13 +1,12 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { tool } from "@opencode-ai/plugin"
 import {
-  TOOL_DESCRIPTION,
-  ARG_DESCRIPTIONS,
+  ANNOUNCE_DESCRIPTION,
+  BROADCAST_DESCRIPTION,
   BROADCAST_MISSING_MESSAGE,
   announceResult,
   broadcastUnknownRecipient,
   broadcastResult,
-  unknownAction,
   SYSTEM_PROMPT,
   urgentNotification,
 } from "./prompt"
@@ -211,116 +210,102 @@ const plugin: Plugin = async (ctx) => {
   
   return {
     tool: {
-      iam: tool({
-        description: TOOL_DESCRIPTION,
+      announce: tool({
+        description: ANNOUNCE_DESCRIPTION,
         args: {
-          action: tool.schema.enum(["broadcast", "announce"]).describe(
-            ARG_DESCRIPTIONS.action
-          ),
-          to: tool.schema.string().optional().describe(
-            ARG_DESCRIPTIONS.to
-          ),
-          message: tool.schema.string().optional().describe(
-            ARG_DESCRIPTIONS.message
-          ),
+          message: tool.schema.string().describe("Describe what you're working on"),
         },
         async execute(args, context) {
           const sessionId = context.sessionID
-          
-          // Register this session on first iam use
           registerSession(sessionId)
           
           const alias = getAlias(sessionId)
-          const announced = hasAnnounced(sessionId)
           
-          log.debug(LOG.TOOL, `iam action: ${args.action}`, { sessionId, alias, args })
-          
-          switch (args.action) {
-            case "broadcast": {
-              if (!args.message) {
-                log.warn(LOG.TOOL, `broadcast missing 'message'`, { alias })
-                return BROADCAST_MISSING_MESSAGE
-              }
-              
-              const knownAgents = getKnownAgents(sessionId)
-              let targetAliases: string[]
-              
-              // Determine recipients
-              if (!args.to || args.to.toLowerCase() === "all") {
-                // Broadcast to all
-                targetAliases = knownAgents
-              } else {
-                // Parse comma-separated list
-                targetAliases = args.to.split(",").map(s => s.trim()).filter(Boolean)
-              }
-              
-              if (targetAliases.length === 0) {
-                return `No agents to broadcast to. Use action="announce" to see parallel agents.`
-              }
-              
-              // Get parent ID early so we can resolve "parent" alias
-              const parentId = await getParentId(client, sessionId)
-              
-              // Resolve all aliases and validate
-              const recipientSessions: string[] = []
-              for (const targetAlias of targetAliases) {
-                const recipientSessionId = resolveAlias(targetAlias, parentId)
-                if (!recipientSessionId) {
-                  log.warn(LOG.TOOL, `broadcast unknown recipient`, { alias, to: targetAlias })
-                  return broadcastUnknownRecipient(targetAlias, knownAgents)
-                }
-                recipientSessions.push(recipientSessionId)
-              }
-              
-              // Send to all recipients
-              let messageId = ""
-              for (const recipientSessionId of recipientSessions) {
-                const msg = sendMessage(alias, recipientSessionId, args.message)
-                messageId = msg.id // Use last message ID
-                
-                // Mark messages FROM this recipient as read (since we're responding to them)
-                markMessagesFromSenderAsRead(sessionId, recipientSessionId)
-              }
-              
-              // Check if we're broadcasting to our parent session - if so, wake it up
-              if (parentId && recipientSessions.includes(parentId)) {
-                log.info(LOG.MESSAGE, `Broadcasting to parent session, calling notify_once`, { sessionId, parentId })
-                try {
-                  // Call notify_once to wake parent for one model iteration
-                  // Access the internal SDK client to make a raw POST request
-                  const internalClient = (client as any)._client
-                  if (internalClient?.post) {
-                    await internalClient.post({
-                      url: `/session/${parentId}/notify_once`,
-                      body: { text: `[IAM] Message from ${alias}: ${args.message}` },
-                    })
-                    log.info(LOG.MESSAGE, `Parent session notified successfully`, { parentId })
-                  } else {
-                    log.warn(LOG.MESSAGE, `Could not access SDK client for notify_once`, { parentId })
-                  }
-                } catch (e) {
-                  log.warn(LOG.MESSAGE, `Failed to notify parent session`, { parentId, error: String(e) })
-                }
-              }
-              
-              return broadcastResult(targetAliases, messageId)
-            }
-            
-            case "announce": {
-              if (!args.message) {
-                log.warn(LOG.TOOL, `announce missing 'message'`, { alias })
-                return `Error: 'message' parameter is required for action="announce". Describe what you're working on.`
-              }
-              
-              setDescription(sessionId, args.message)
-              const parallelAgents = getParallelAgents(sessionId)
-              
-              return announceResult(alias, parallelAgents)
-            }
-            
-            default:
-              return unknownAction(args.action)
+          if (!args.message) {
+            log.warn(LOG.TOOL, `announce missing 'message'`, { alias })
+            return `Error: 'message' parameter is required. Describe what you're working on.`
           }
+          
+          log.debug(LOG.TOOL, `announce called`, { sessionId, alias, message: args.message })
+          
+          setDescription(sessionId, args.message)
+          const parallelAgents = getParallelAgents(sessionId)
+          
+          return announceResult(alias, parallelAgents)
+        },
+      }),
+      
+      broadcast: tool({
+        description: BROADCAST_DESCRIPTION,
+        args: {
+          to: tool.schema.string().optional().describe("Recipient(s): 'agentA', 'agentA,agentC', or 'parent' (default: all)"),
+          message: tool.schema.string().describe("Your message content"),
+        },
+        async execute(args, context) {
+          const sessionId = context.sessionID
+          registerSession(sessionId)
+          
+          const alias = getAlias(sessionId)
+          
+          if (!args.message) {
+            log.warn(LOG.TOOL, `broadcast missing 'message'`, { alias })
+            return BROADCAST_MISSING_MESSAGE
+          }
+          
+          log.debug(LOG.TOOL, `broadcast called`, { sessionId, alias, to: args.to, messageLength: args.message.length })
+          
+          const knownAgents = getKnownAgents(sessionId)
+          let targetAliases: string[]
+          
+          if (!args.to || args.to.toLowerCase() === "all") {
+            targetAliases = knownAgents
+          } else {
+            targetAliases = args.to.split(",").map(s => s.trim()).filter(Boolean)
+          }
+          
+          if (targetAliases.length === 0) {
+            return `No agents to broadcast to. Use announce to see parallel agents.`
+          }
+          
+          const parentId = await getParentId(client, sessionId)
+          
+          const recipientSessions: string[] = []
+          for (const targetAlias of targetAliases) {
+            const recipientSessionId = resolveAlias(targetAlias, parentId)
+            if (!recipientSessionId) {
+              log.warn(LOG.TOOL, `broadcast unknown recipient`, { alias, to: targetAlias })
+              return broadcastUnknownRecipient(targetAlias, knownAgents)
+            }
+            recipientSessions.push(recipientSessionId)
+          }
+          
+          let messageId = ""
+          for (const recipientSessionId of recipientSessions) {
+            const msg = sendMessage(alias, recipientSessionId, args.message)
+            messageId = msg.id
+            
+            markMessagesFromSenderAsRead(sessionId, recipientSessionId)
+          }
+          
+          if (parentId && recipientSessions.includes(parentId)) {
+            log.info(LOG.MESSAGE, `Broadcasting to parent session, calling notify_once`, { sessionId, parentId })
+            try {
+              const internalClient = (client as any)._client
+              if (internalClient?.post) {
+                await internalClient.post({
+                  url: `/session/${parentId}/notify_once`,
+                  body: { text: `[IAM] Message from ${alias}: ${args.message}` },
+                })
+                log.info(LOG.MESSAGE, `Parent session notified successfully`, { parentId })
+              } else {
+                log.warn(LOG.MESSAGE, `Could not access SDK client for notify_once`, { parentId })
+              }
+            } catch (e) {
+              log.warn(LOG.MESSAGE, `Failed to notify parent session`, { parentId, error: String(e) })
+            }
+          }
+          
+          return broadcastResult(targetAliases, messageId)
         },
       }),
     },
@@ -391,15 +376,15 @@ const plugin: Plugin = async (ctx) => {
       output.messages.push(syntheticMessage as any)
     },
     
-    // Add iam to subagent_tools so it's only available to subagents
+    // Add announce and broadcast to subagent_tools
     config: async (opencodeConfig) => {
       const experimental = opencodeConfig.experimental as any ?? {}
       const existingSubagentTools = experimental.subagent_tools ?? []
       opencodeConfig.experimental = {
         ...experimental,
-        subagent_tools: [...existingSubagentTools, "iam"],
+        subagent_tools: [...existingSubagentTools, "announce", "broadcast"],
       } as typeof opencodeConfig.experimental
-      log.info(LOG.HOOK, `Added 'iam' to experimental.subagent_tools`)
+      log.info(LOG.HOOK, `Added 'announce' and 'broadcast' to experimental.subagent_tools`)
     },
   }
 }

@@ -19,24 +19,23 @@ When an agent completes their task, they're encouraged to broadcast a completion
 
 The plugin injects IAM instructions into the **system prompt** for child sessions only (sessions with a `parentID`).
 
-## Actions
+## Tools
 
-| Action | Description |
-|--------|-------------|
+| Tool | Description |
+|------|-------------|
 | `announce` | Declare what you're working on. Shows all parallel agents. Can re-announce to update. |
-| `read` | Read your inbox (marks messages as read). |
 | `broadcast` | Send a message. Use `to` for specific agent(s), or omit for all. |
 
 ## Examples
 
 ```
 # Announce what you're doing (also shows parallel agents)
-action="announce", message="Refactoring the auth module"
+announce(message="Refactoring the auth module")
 
 # Message everyone
-action="broadcast", message="Found a bug in config.ts, heads up"
+broadcast(message="Found a bug in config.ts, heads up")
 
 # Message specific agent(s)
-action="broadcast", to="agentA", message="Can you check auth.ts?"
-action="broadcast", to="agentA,agentC", message="Sync up on API changes"
+broadcast(to="agentA", message="Can you check auth.ts?")
+broadcast(to="agentA,agentC", message="Sync up on API changes")
 ```
