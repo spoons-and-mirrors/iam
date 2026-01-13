@@ -106,24 +106,24 @@ export function broadcastUnknownRecipient(
 // =============================================================================
 
 export function buildInboxContent(messages: InboxMessage[]): string {
-  const lines: string[] = [];
+   const lines: string[] = [];
 
-  lines.push(`📨 INCOMING MESSAGES (${messages.length}) 📨`);
-  lines.push(``);
+   lines.push(`INCOMING MESSAGES (${messages.length})`);
+   lines.push(``);
 
-  for (const msg of messages) {
-    lines.push(`--- Message #${msg.id} from ${msg.from} ---`);
-    lines.push(msg.body);
-    lines.push(``);
-  }
+   for (const msg of messages) {
+     lines.push(`--- Message #${msg.id} from ${msg.from} ---`);
+     lines.push(msg.body);
+     lines.push(``);
+   }
 
-  lines.push(`---`);
-  lines.push(
-    `Reply: broadcast(recipient="<sender>", reply_to="<id>", message="...")`
-  );
+   lines.push(`---`);
+   lines.push(
+     `Reply: broadcast(recipient="<sender>", reply_to="<id>", message="...")`
+   );
 
-  return lines.join("\n");
-}
+   return lines.join("\n");
+ }
 
 // =============================================================================
 // System prompt injection

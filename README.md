@@ -51,7 +51,7 @@ broadcast(recipient="agentA", reply_to="1", message="...") # Reply and mark hand
 Messages appear in an agent's context as a bundled inbox:
 
 ```
-📨 INCOMING MESSAGES (2) 📨
+INCOMING MESSAGES (2)
 
 --- Message #1 from agentA ---
 What's the status on the API?
