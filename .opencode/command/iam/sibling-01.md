@@ -1,6 +1,6 @@
 Spawn 2 parallel subagents using the Task tool:
 
-use this exact prompt for the frst agent :
+use this exact prompt for the first agent :
 
 DO THE FOLLOWING:
 
@@ -9,7 +9,7 @@ DO THE FOLLOWING:
 - sleep bash 2s
 - use the broadcast tool to target the other agent, asking a question about the programming world
 - sleep bash 4s
-- use the broadcast tool to ask another quesiton
+- use the broadcast tool to ask another question
 - sleep bash 2s
 
 REPEAT THIS PROCESS 3 TIMES
