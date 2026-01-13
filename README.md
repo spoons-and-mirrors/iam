@@ -1,41 +1,73 @@
-# IAM Plugin for OpenCode
+# IAM (Inter-Agent Messaging)
 
-Lets parallel subagents talk to each other. No configuration needed — just install and it works.
+A plugin for OpenCode that enables parallel agents to communicate with each other.
 
-## What It Does
+## Features
 
-When you spawn multiple agents with the `task` tool, they can:
-- **Announce** what they're working on (and see all parallel agents)
-- **Broadcast** messages to one, some, or all agents
-- Get **notified** when new messages arrive
+- **Single Tool**: `broadcast` for all agent communication
+- **Auto-Registration**: First call registers the agent and shows other agents
+- **Message Injection**: Messages appear in recipient's context as tool results
+- **Parent Notification**: Messages to parent sessions trigger `notify_once`
+
+## Tool Schema
+
+### `broadcast`
+
+```yaml
+description: "Communicate with other parallel agents. First call registers you and shows other agents."
+
+parameters:
+  recipient:
+    type: string
+    required: false
+    description: "Target agent(s), comma-separated. Omit to send to all."
+  
+  message:
+    type: string
+    required: true
+    description: "Your message"
+
+returns:
+  - Your assigned alias (e.g., "agentA")
+  - Delivery confirmation with recipient list
+  - List of other agents (on first call)
+```
+
+## Usage Examples
+
+```
+# First call - registers and shows other agents
+broadcast(message="Starting work on authentication module")
+
+# Send to specific agent
+broadcast(recipient="agentB", message="Can you help with the API design?")
+
+# Send to multiple agents
+broadcast(recipient="agentA,agentC", message="Review complete, merging now")
+
+# Send to all agents (same as omitting 'recipient')
+broadcast(message="Done! Here's what I found...")
+```
 
 ## How It Works
 
-Agents get friendly names (agentA, agentB, ...) and automatically discover each other.
+1. **Registration**: First `broadcast` call registers the session and assigns an alias (agentA, agentB, etc.)
 
-When an agent announces, the response shows all other parallel agents — whether they've announced yet or not. This gives agents instant awareness of who's working alongside them. Agents can re-announce to update their status.
+2. **Message Delivery**: Messages are stored in memory and injected into recipient sessions as assistant messages with tool parts
 
-When an agent completes their task, they're encouraged to broadcast a completion message so others know.
+3. **Context Injection**: Recipients see messages in their context as `iam_message` tool results
 
-The plugin injects IAM instructions into the **system prompt** for child sessions only (sessions with a `parentID`).
+4. **System Prompt**: All sessions receive instructions on how to use the tool and read incoming messages
 
-## Tools
+## Configuration
 
-| Tool | Description |
-|------|-------------|
-| `announce` | Declare what you're working on. Shows all parallel agents. Can re-announce to update. |
-| `broadcast` | Send a message. Use `to` for specific agent(s), or omit for all. |
+The plugin automatically adds `broadcast` to `experimental.subagent_tools` so it's available to task agents.
 
-## Examples
+## Logs
 
-```
-# Announce what you're doing (also shows parallel agents)
-announce(message="Refactoring the auth module")
-
-# Message everyone
-broadcast(message="Found a bug in config.ts, heads up")
-
-# Message specific agent(s)
-broadcast(to="agentA", message="Can you check auth.ts?")
-broadcast(to="agentA,agentC", message="Sync up on API changes")
-```
+Logs are written to `.logs/iam.log` with categories:
+- `[HOOK]` - Plugin lifecycle events
+- `[SESSION]` - Agent registration
+- `[TOOL]` - Tool execution
+- `[MESSAGE]` - Message sending/delivery
+- `[INJECT]` - Context injection

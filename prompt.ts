@@ -2,9 +2,7 @@
 // All LLM-facing prompts for the iam plugin
 // =============================================================================
 
-export const ANNOUNCE_DESCRIPTION = `Announce what you're working on to other parallel agents. Use this first to let others know what you're doing and see all parallel agents. You can re-announce to update your status.`;
-
-export const BROADCAST_DESCRIPTION = `Send a message to other parallel agents. Use 'to' for specific agent(s), or omit for all.`;
+export const BROADCAST_DESCRIPTION = `Communicate with other parallel agents. First call registers you and shows other agents. Use 'recipient' for specific agent(s), or omit to message all.`;
 
 // =============================================================================
 // Types
@@ -19,59 +17,53 @@ export interface ParallelAgent {
 // Tool output messages
 // =============================================================================
 
-export function formatAgentList(agents: ParallelAgent[]): string[] {
+export function broadcastResult(
+  alias: string,
+  recipients: string[],
+  messageId: string,
+  parallelAgents: ParallelAgent[],
+  isFirstCall: boolean
+): string {
   const lines: string[] = [];
-  for (const agent of agents) {
-    if (agent.description) {
-      lines.push(`• ${agent.alias} is working on: ${agent.description}`);
-    } else {
-      lines.push(`• ${agent.alias} is running (hasn't announced yet)`);
-    }
+  
+  // Always show identity
+  lines.push(`YOUR ALIAS: ${alias}`);
+  lines.push(`(Do NOT use "${alias}" as the "to" target - that's YOU!)`);
+  lines.push(``);
+  
+  // Show message confirmation
+  if (recipients.length > 0) {
+    const recipientStr = recipients.length === 1 ? recipients[0] : recipients.join(", ");
+    lines.push(`Message sent to: ${recipientStr}`);
+    lines.push(`Message ID: ${messageId}`);
   }
-  return lines;
-}
-
-export function announceResult(alias: string, parallelAgents: ParallelAgent[]): string {
-  const lines = [
-    `Announced! Other agents will see your description when they call announce.`,
-    ``,
-    `YOUR ALIAS IS: ${alias}`,
-    `(Use this when others need to message you. Do NOT use "${alias}" as the "to" target - that's YOU!)`,
-  ];
-
-  if (parallelAgents.length > 0) {
+  
+  // Show other agents (on first call or when useful)
+  if (isFirstCall || parallelAgents.length > 0) {
     lines.push(``);
-    lines.push(`--- Other Agents You Can Message ---`);
-    for (const agent of parallelAgents) {
-      if (agent.description) {
-        lines.push(`• ${agent.alias}: ${agent.description}`);
-      } else {
-        lines.push(`• ${agent.alias}: (hasn't announced yet)`);
+    if (parallelAgents.length > 0) {
+      lines.push(`--- Other Agents ---`);
+      for (const agent of parallelAgents) {
+        if (agent.description) {
+          lines.push(`- ${agent.alias}: ${agent.description}`);
+        } else {
+          lines.push(`- ${agent.alias}: (no status yet)`);
+        }
       }
+    } else {
+      lines.push(`No other agents running yet.`);
     }
-    lines.push(``);
-    lines.push(`To message them, use: broadcast(to="${parallelAgents[0].alias}", message="...")`);
-  } else {
-    lines.push(``);
-    lines.push(`No other agents running yet. They will appear when they call announce.`);
   }
-
+  
   return lines.join("\n");
 }
 
-export const BROADCAST_MISSING_MESSAGE = `Error: 'message' parameter is required for action="broadcast".`;
+export const BROADCAST_MISSING_MESSAGE = `Error: 'message' parameter is required.`;
 
 export function broadcastUnknownRecipient(to: string, known: string[]): string {
   const list = known.length > 0 ? `Known agents: ${known.join(", ")}` : "No agents available yet.";
   return `Error: Unknown recipient "${to}". ${list}`;
 }
-
-export function broadcastResult(recipients: string[], messageId: string): string {
-  const recipientStr = recipients.length === 1 ? recipients[0] : recipients.join(", ");
-  return `Message sent!\n\nTo: ${recipientStr}\nMessage ID: ${messageId}\n\nRecipients will be notified.`;
-}
-
-
 
 // =============================================================================
 // System prompt injection
@@ -81,26 +73,24 @@ export const SYSTEM_PROMPT = `
 <instructions tool="iam">
 # Inter-Agent Messaging
 
-You have access to \`announce\` and \`broadcast\` tools for communicating with other parallel agents.
+You have access to the \`broadcast\` tool for communicating with other parallel agents.
 
 Usage:
-- announce(message="...") - Announce what you're working on (do this first!)
-- broadcast(message="...") - Message all agents
-- broadcast(to="agentA", message="...") - Message specific agent(s)
-- broadcast(to="agentA,agentC", message="...") - Message multiple agents
+- broadcast(message="...") - Send to all agents (also registers you and shows other agents)
+- broadcast(recipient="agentA", message="...") - Send to specific agent
+- broadcast(recipient="agentA,agentC", message="...") - Send to multiple agents
+
+Your first broadcast registers you and shows who else is running. Subsequent calls show delivery confirmation.
 
 IMPORTANT: When other agents message you, their messages appear in your context as tool results from "iam_message". 
 READ THESE CAREFULLY and respond to any questions they ask!
-
-At the start of your task, use announce to let other agents know what you're doing.
-You can re-announce to update your status as your task evolves.
 
 When you complete your task, broadcast to all: "Done. Here's what I found/did: ..."
 </instructions>
 `;
 
 // =============================================================================
-// Urgent notification injection
+// Urgent notification injection (kept for potential future use)
 // =============================================================================
 
 export interface UnreadMessage {
@@ -122,7 +112,7 @@ export function urgentNotification(messages: UnreadMessage[]): string {
     lines.push(``);
   }
   
-  lines.push(`Respond NOW using: broadcast tool with to="<sender>", message="<your response>"`);
+  lines.push(`Respond NOW using: broadcast(to="<sender>", message="<your response>")`);
   lines.push(`</system-reminder>`);
   
   return lines.join("\n");

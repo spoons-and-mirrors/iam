@@ -1,14 +1,11 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { tool } from "@opencode-ai/plugin"
 import {
-  ANNOUNCE_DESCRIPTION,
   BROADCAST_DESCRIPTION,
   BROADCAST_MISSING_MESSAGE,
-  announceResult,
   broadcastUnknownRecipient,
   broadcastResult,
   SYSTEM_PROMPT,
-  urgentNotification,
 } from "./prompt"
 import { log, LOG } from "./logger"
 
@@ -266,7 +263,7 @@ function createAssistantMessageWithToolPart(
 ${messageBody}
 
 ---
-Reply using: broadcast(to="${senderAlias}", message="your response")`,
+Reply using: broadcast(recipient="${senderAlias}", message="your response")`,
           title: `📨 Message from ${senderAlias}`,
           metadata: {
             iam_sender: senderAlias,
@@ -290,39 +287,15 @@ const plugin: Plugin = async (ctx) => {
   
   return {
     tool: {
-      announce: tool({
-        description: ANNOUNCE_DESCRIPTION,
-        args: {
-          message: tool.schema.string().describe("Describe what you're working on"),
-        },
-        async execute(args, context) {
-          const sessionId = context.sessionID
-          registerSession(sessionId)
-          
-          const alias = getAlias(sessionId)
-          
-          if (!args.message) {
-            log.warn(LOG.TOOL, `announce missing 'message'`, { alias })
-            return `Error: 'message' parameter is required. Describe what you're working on.`
-          }
-          
-          log.debug(LOG.TOOL, `announce called`, { sessionId, alias, message: args.message })
-          
-          setDescription(sessionId, args.message)
-          const parallelAgents = getParallelAgents(sessionId)
-          
-          return announceResult(alias, parallelAgents)
-        },
-      }),
-      
       broadcast: tool({
         description: BROADCAST_DESCRIPTION,
         args: {
-          to: tool.schema.string().optional().describe("Recipient(s): 'agentA', 'agentA,agentC', or 'parent' (default: all)"),
-          message: tool.schema.string().describe("Your message content"),
+          recipient: tool.schema.string().optional().describe("Target agent(s), comma-separated. Omit to send to all."),
+          message: tool.schema.string().describe("Your message"),
         },
         async execute(args, context) {
           const sessionId = context.sessionID
+          const isFirstCall = !activeSessions.has(sessionId)
           registerSession(sessionId)
           
           const alias = getAlias(sessionId)
@@ -332,24 +305,32 @@ const plugin: Plugin = async (ctx) => {
             return BROADCAST_MISSING_MESSAGE
           }
           
-          log.debug(LOG.TOOL, `broadcast called`, { sessionId, alias, to: args.to, messageLength: args.message.length })
+          // Use message as status description (truncated)
+          setDescription(sessionId, args.message.substring(0, 100))
+          
+          log.debug(LOG.TOOL, `broadcast called`, { sessionId, alias, recipient: args.recipient, messageLength: args.message.length, isFirstCall })
           
           const knownAgents = getKnownAgents(sessionId)
+          const parallelAgents = getParallelAgents(sessionId)
           let targetAliases: string[]
           
-          if (!args.to || args.to.toLowerCase() === "all") {
+          if (!args.recipient) {
+            // No target specified - send to all known agents
             targetAliases = knownAgents
           } else {
-            targetAliases = args.to.split(",").map(s => s.trim()).filter(Boolean)
+            targetAliases = args.recipient.split(",").map(s => s.trim()).filter(Boolean)
           }
           
+          // If no agents to send to, just return registration info
           if (targetAliases.length === 0) {
-            return `No agents to broadcast to. Use announce to see parallel agents.`
+            log.info(LOG.TOOL, `No recipients, returning agent info`, { alias })
+            return broadcastResult(alias, [], "", parallelAgents, isFirstCall)
           }
           
           const parentId = await getParentId(client, sessionId)
           
           const recipientSessions: string[] = []
+          const validTargets: string[] = []
           for (const targetAlias of targetAliases) {
             const recipientSessionId = resolveAlias(targetAlias, parentId)
             if (!recipientSessionId) {
@@ -362,10 +343,12 @@ const plugin: Plugin = async (ctx) => {
               continue
             }
             recipientSessions.push(recipientSessionId)
+            validTargets.push(targetAlias)
           }
           
           if (recipientSessions.length === 0) {
-            return `No valid recipients. You cannot message yourself. Use announce to see parallel agents.`
+            log.info(LOG.TOOL, `No valid recipients after filtering`, { alias })
+            return broadcastResult(alias, [], "", parallelAgents, isFirstCall)
           }
           
           // Check if we're broadcasting to parent (to send notification)
@@ -405,7 +388,7 @@ const plugin: Plugin = async (ctx) => {
             }
           }
           
-          return broadcastResult(targetAliases, messageId)
+          return broadcastResult(alias, validTargets, messageId, parallelAgents, isFirstCall)
         },
       }),
     },
@@ -494,15 +477,15 @@ const plugin: Plugin = async (ctx) => {
       log.info(LOG.INJECT, `Marked ${unread.length} messages as read after injection`, { sessionId })
     },
     
-    // Add announce and broadcast to subagent_tools
-    config: async (opencodeConfig) => {
-      const experimental = opencodeConfig.experimental as any ?? {}
+    // Add broadcast to subagent_tools
+    "experimental.config.transform": async (_input: any, output: any) => {
+      const experimental = output.experimental ?? {}
       const existingSubagentTools = experimental.subagent_tools ?? []
-      opencodeConfig.experimental = {
+      output.experimental = {
         ...experimental,
-        subagent_tools: [...existingSubagentTools, "announce", "broadcast"],
-      } as typeof opencodeConfig.experimental
-      log.info(LOG.HOOK, `Added 'announce' and 'broadcast' to experimental.subagent_tools`)
+        subagent_tools: [...existingSubagentTools, "broadcast"],
+      }
+      log.info(LOG.HOOK, `Added 'broadcast' to experimental.subagent_tools`)
     },
   }
 }
