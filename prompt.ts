@@ -27,7 +27,7 @@ export function broadcastResult(
   alias: string,
   recipients: string[],
   parallelAgents: ParallelAgent[],
-  handledMessages: HandledMessage[],
+  handledMessage?: HandledMessage,
 ): string {
   const lines: string[] = [];
 
@@ -57,15 +57,17 @@ export function broadcastResult(
     lines.push(`Message sent to: ${recipientStr}`);
   }
 
-  // Show handled messages
-  if (handledMessages.length > 0) {
+  // Show handled message
+  if (handledMessage) {
     lines.push(``);
-    lines.push(`Marked as handled: ${handledMessages.length} message(s)`);
-    for (const msg of handledMessages) {
-      const preview =
-        msg.body.length > 80 ? msg.body.substring(0, 80) + "..." : msg.body;
-      lines.push(`  #${msg.id} from ${msg.from}: "${preview}"`);
-    }
+    const preview =
+      handledMessage.body.length > 80
+        ? handledMessage.body.substring(0, 80) + "..."
+        : handledMessage.body;
+    lines.push(
+      `Marked as handled: #${handledMessage.id} from ${handledMessage.from}`,
+    );
+    lines.push(`  "${preview}"`);
   }
 
   return lines.join("\n");
@@ -116,8 +118,7 @@ Incoming messages appear as \`broadcast\` tool results with a \`messages\` array
 { messages: [{ id: 1, from: "agentA", body: "..." }, ...] }
 \`\`\`
 
-Use \`reply_to\` to mark messages as handled (they persist until you do):
-- \`broadcast(recipient="agentA", reply_to=[1], message="...")\`
-- \`broadcast(recipient="agentA", reply_to=[1, 2, 3], message="...")\`
+Use \`reply_to\` to mark a message as handled (they persist until you do):
+- \`broadcast(recipient="agentA", reply_to=1, message="...")\`
 </instructions>
 `;

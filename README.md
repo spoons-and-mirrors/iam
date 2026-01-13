@@ -6,7 +6,7 @@ Enable parallel agents communication for opencode
 
 ## How It Works
 
-Parallel agents they can send messages to each other using the `broadcast` tool. Messages are relayed to the proper agent's context.
+Parallel agents can send messages to each other using the `broadcast` tool. Messages are relayed to the proper agent's context.
 
 ```mermaid
 sequenceDiagram
@@ -17,36 +17,42 @@ sequenceDiagram
     Parent->>A: spawn task
     Parent->>B: spawn task
 
-    Note over A,B: Both agents auto-register on first LLM call
+    Note over A,B: Registration
+
+    A->>A: broadcast(message="Doing X")
+    Note over A: Tool result shows agentB is available
+
+    B->>B: broadcast(message="Doing Y")
+    Note over B: Tool result shows agentA is available
 
     A->>B: broadcast(recipient="agentB", message="Question?")
 
-    Note over B: Receives message
-    Note over B: Responds
+    Note over B: Receives message in inbox
 
-    B->>A: broadcast(recipient="agentA", reply_to=[1], message="Answer!")
+    B->>A: broadcast(recipient="agentA", reply_to=1, message="Answer!")
+    Note over B: Tool result shows source message
 
     Note over A: Receives reply
-    Note over B: Tool output shows both reply and handled message
-    Note over B: Remove message from inbox
+    Note over B: Message removed from inbox
+    Note over B: Audit trace persists in tool result
 ```
 
 ## The `broadcast` Tool
 
 ```
-broadcast(message="...")                                 # Send to all agents
-broadcast(recipient="agentB", message="...")             # Send to specific agent
-broadcast(reply_to=[1, 2], message="...")                # Mark messages as handled
-broadcast(recipient="agentA", reply_to=[1], message="...") # Reply and mark handled
+broadcast(message="...")                                  # Send to all agents
+broadcast(recipient="agentB", message="...")              # Send to specific agent
+broadcast(reply_to=1, message="...")                      # Mark message as handled
+broadcast(recipient="agentA", reply_to=1, message="...")  # Reply and mark handled
 ```
 
 ### Parameters
 
-| Parameter   | Required | Description                                                          |
-| ----------- | -------- | -------------------------------------------------------------------- |
-| `message`   | Yes      | Your message content                                                 |
-| `recipient` | No       | Target agent(s), comma-separated. Omit to send to all                |
-| `reply_to`  | No       | Array of message IDs to mark as handled (e.g., `[1]` or `[1, 2, 3]`) |
+| Parameter   | Required | Description                               |
+| ----------- | -------- | ----------------------------------------- |
+| `message`   | Yes      | Your message content                      |
+| `recipient` | No       | Target agent(s), comma-separated          |
+| `reply_to`  | No       | Message ID to mark as handled (e.g., `1`) |
 
 ## Receiving Messages
 
@@ -55,16 +61,15 @@ Messages appear as a `broadcast` tool result with structured data:
 ```json
 {
   "messages": [
-    { "id": 1, "from": "agentA", "body": "What's the status on the API?" },
-    { "id": 2, "from": "agentA", "body": "Also, can you check the tests?" }
-  ],
-  "agents": ["agentA", "agentC: Working on backend"]
+    {"id": 1, "from": "agentA", "body": "What's the status on the API?"},
+    {"id": 2, "from": "agentA", "body": "Also, can you check the tests?"}
+  ]
 }
 ```
 
-The `agents` array always shows available agents to message. This is injected even when there are no incoming messages.
-
 Messages persist in the inbox until the agent marks them as handled using `reply_to`.
+
+**Discovery:** Agents discover each other by calling `broadcast` - the tool result shows all available agents.
 
 ## Installation
 
@@ -80,21 +85,19 @@ Add to your OpenCode config:
 # Parent spawns two agents to work on different parts of a feature
 
 AgentA (working on frontend):
-  → broadcast(message="Starting frontend work")
-  → ... does work ...
-  → broadcast(recipient="agentB", message="Need the API schema")
+  -> broadcast(message="Starting frontend work")
+     # Tool result shows: "Available agents: agentB"
+  -> ... does work ...
+  -> broadcast(recipient="agentB", message="Need the API schema")
 
 AgentB (working on backend):
-  → broadcast(message="Starting backend work")
-  → ... sees AgentA's question in inbox ...
-  → broadcast(recipient="agentA", reply_to=[1], message="Here's the schema: {...}")
+  -> broadcast(message="Starting backend work")
+     # Tool result shows: "Available agents: agentA"
+  -> ... sees AgentA's question in inbox ...
+  -> broadcast(recipient="agentA", reply_to=1, message="Here's the schema: {...}")
+     # Tool result shows: Marked as handled: #1 from agentA
 
 AgentA:
-  → ... sees AgentB's response in inbox ...
-  → broadcast(reply_to=[1], message="Got it, thanks!")
+  -> ... sees AgentB's response in inbox ...
+  -> broadcast(reply_to=1, message="Got it, thanks!")
 ```
-
-## Notes
-
-- Agents are assigned aliases automatically: `agentA`, `agentB`, `agentC`, etc.
-- Logs are written to `.logs/iam.log` for debugging

@@ -574,9 +574,9 @@ const plugin: Plugin = async (ctx) => {
             .describe("Target agent(s), comma-separated. Omit to send to all."),
           message: tool.schema.string().describe("Your message"),
           reply_to: tool.schema
-            .array(tool.schema.number())
+            .number()
             .optional()
-            .describe("Message IDs to mark as handled (e.g., [1, 2, 3])"),
+            .describe("Message ID to mark as handled"),
         },
         async execute(args, context: ToolContext) {
           const sessionId = context.sessionID;
@@ -618,15 +618,17 @@ const plugin: Plugin = async (ctx) => {
             isFirstCall,
           });
 
-          // Handle reply_to - mark messages as handled
-          let handledMessages: HandledMessage[] = [];
-          if (args.reply_to && args.reply_to.length > 0) {
-            handledMessages = markMessagesAsHandled(sessionId, args.reply_to);
-            log.info(LOG.TOOL, `Handled messages via reply_to`, {
-              alias,
-              requested: args.reply_to,
-              actuallyHandled: handledMessages.length,
-            });
+          // Handle reply_to - mark message as handled
+          let handledMessage: HandledMessage | undefined;
+          if (args.reply_to !== undefined) {
+            const handled = markMessagesAsHandled(sessionId, [args.reply_to]);
+            if (handled.length > 0) {
+              handledMessage = handled[0];
+              log.info(LOG.TOOL, `Handled message via reply_to`, {
+                alias,
+                msgId: args.reply_to,
+              });
+            }
           }
 
           const knownAgents = getKnownAliases(sessionId);
@@ -648,7 +650,7 @@ const plugin: Plugin = async (ctx) => {
             log.info(LOG.TOOL, `No recipients, returning agent info`, {
               alias,
             });
-            return broadcastResult(alias, [], parallelAgents, handledMessages);
+            return broadcastResult(alias, [], parallelAgents, handledMessage);
           }
 
           // DORMANT: parent alias feature
@@ -683,7 +685,7 @@ const plugin: Plugin = async (ctx) => {
             log.info(LOG.TOOL, `No valid recipients after filtering`, {
               alias,
             });
-            return broadcastResult(alias, [], parallelAgents, handledMessages);
+            return broadcastResult(alias, [], parallelAgents, handledMessage);
           }
 
           // DORMANT: parent alias feature
@@ -730,7 +732,7 @@ const plugin: Plugin = async (ctx) => {
             alias,
             validTargets,
             parallelAgents,
-            handledMessages,
+            handledMessage,
           );
         },
       }),
