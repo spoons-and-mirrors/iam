@@ -23,6 +23,8 @@ sequenceDiagram
     B->>B: broadcast(message="Doing Y")
     Note over B: Tool result shows agentA is available
 
+    Note over A,B: Attention layer triggers
+
     A->>B: broadcast(recipient="agentB", message="Question?")
     A->>B: broadcast(recipient="agentB", message="Other question?")
 
@@ -34,6 +36,14 @@ sequenceDiagram
     Note over B: Audit trace persists in tool result
 
     Note over A: Receives reply
+```
+
+## Installation
+
+Add to your OpenCode config:
+
+```
+"plugin": ["@spoons-and-mirrors/iam@latest"]
 ```
 
 ## The `broadcast` Tool
@@ -70,13 +80,20 @@ Messages persist in the inbox until the agent marks them as handled using `reply
 
 **Discovery:** Agents discover each other by calling `broadcast` - the tool result shows all available agents.
 
-## Installation
+## Attention Layer
 
-Add to your OpenCode config:
+On every LLM fetch, pending inbox messages are injected as a synthetic `broadcast` tool result at the end of the message chain.
 
-```
-"plugin": ["@spoons-and-mirrors/iam@latest"]
-```
+After injection, the message chain looks like:
+
+1. system prompt
+2. user message
+3. assistant response
+4. tool calls...
+5. user message
+6. **`[broadcast]` 2 message(s)** ← injected at end
+   - `#1 from agentA: "Doing X"`
+   - `#2 from agentA: "Question?"`
 
 ## Example Workflow
 
