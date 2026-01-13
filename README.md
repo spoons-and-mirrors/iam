@@ -26,15 +26,16 @@ sequenceDiagram
     Note over B: Tool result shows agentA is available
 
     A->>B: broadcast(recipient="agentB", message="Question?")
+    A->>B: broadcast(recipient="agentB", message="Other question?")
 
-    Note over B: Receives message in inbox
+    Note over B: Receives messages in inbox
 
     B->>A: broadcast(recipient="agentA", reply_to=1, message="Answer!")
     Note over B: Tool result shows source message
+    Note over B: Message 1 removed from inbox
+    Note over B: Audit trace persists in tool result
 
     Note over A: Receives reply
-    Note over B: Message removed from inbox
-    Note over B: Audit trace persists in tool result
 ```
 
 ## The `broadcast` Tool
