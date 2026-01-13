@@ -35,18 +35,25 @@ export function announceResult(alias: string, parallelAgents: ParallelAgent[]): 
   const lines = [
     `Announced! Other agents will see your description when they call announce.`,
     ``,
-    `You are: ${alias}`,
+    `YOUR ALIAS IS: ${alias}`,
+    `(Use this when others need to message you. Do NOT use "${alias}" as the "to" target - that's YOU!)`,
   ];
 
   if (parallelAgents.length > 0) {
     lines.push(``);
-    lines.push(`--- Parallel Agents ---`);
-    lines.push(...formatAgentList(parallelAgents));
+    lines.push(`--- Other Agents You Can Message ---`);
+    for (const agent of parallelAgents) {
+      if (agent.description) {
+        lines.push(`• ${agent.alias}: ${agent.description}`);
+      } else {
+        lines.push(`• ${agent.alias}: (hasn't announced yet)`);
+      }
+    }
     lines.push(``);
-    lines.push(`Use action="broadcast" to coordinate with them.`);
+    lines.push(`To message them, use: broadcast(to="${parallelAgents[0].alias}", message="...")`);
   } else {
     lines.push(``);
-    lines.push(`No other agents running yet.`);
+    lines.push(`No other agents running yet. They will appear when they call announce.`);
   }
 
   return lines.join("\n");
@@ -82,9 +89,11 @@ Usage:
 - broadcast(to="agentA", message="...") - Message specific agent(s)
 - broadcast(to="agentA,agentC", message="...") - Message multiple agents
 
+IMPORTANT: When other agents message you, their messages appear in your context as tool results from "iam_message". 
+READ THESE CAREFULLY and respond to any questions they ask!
+
 At the start of your task, use announce to let other agents know what you're doing.
 You can re-announce to update your status as your task evolves.
-Check your inbox when notified about new messages.
 
 When you complete your task, broadcast to all: "Done. Here's what I found/did: ..."
 </instructions>

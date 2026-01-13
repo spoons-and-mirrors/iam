@@ -201,6 +201,86 @@ async function getParentId(client: any, sessionId: string): Promise<string | nul
 }
 
 // ============================================================================
+// Helper to create assistant message with tool part
+// ============================================================================
+
+function createAssistantMessageWithToolPart(
+  sessionId: string,
+  senderAlias: string,
+  messageBody: string,
+  messageId: string,
+  timestamp: number,
+  baseUserMessage: any
+): any {
+  const now = Date.now()
+  const userInfo = baseUserMessage.info
+  
+  const assistantMessageId = `msg_iam_${now}_${messageId}`
+  const partId = `prt_iam_${now}_${messageId}`
+  const callId = `call_iam_${now}_${messageId}`
+  
+  log.debug(LOG.MESSAGE, `Creating assistant message with tool part`, {
+    sessionId,
+    senderAlias,
+    messageId: assistantMessageId,
+    partId,
+    callId,
+  })
+  
+  return {
+    info: {
+      id: assistantMessageId,
+      sessionID: sessionId,
+      role: "assistant",
+      agent: userInfo.agent || "code",
+      parentID: userInfo.id,
+      modelID: userInfo.model?.modelID || "gpt-4o-2024-08-06",
+      providerID: userInfo.model?.providerID || "openai",
+      mode: "default",
+      path: {
+        cwd: "/",
+        root: "/",
+      },
+      time: { created: now, completed: now },
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      ...(userInfo.variant !== undefined && { variant: userInfo.variant }),
+    },
+    parts: [
+      {
+        id: partId,
+        sessionID: sessionId,
+        messageID: assistantMessageId,
+        type: "tool",
+        callID: callId,
+        tool: "iam_message",
+        state: {
+          status: "completed",
+          input: {
+            from: senderAlias,
+            messageId: messageId,
+            timestamp: timestamp,
+          },
+          output: `📨 INCOMING MESSAGE FROM ${senderAlias.toUpperCase()} 📨
+
+${messageBody}
+
+---
+Reply using: broadcast(to="${senderAlias}", message="your response")`,
+          title: `📨 Message from ${senderAlias}`,
+          metadata: {
+            iam_sender: senderAlias,
+            iam_message_id: messageId,
+            iam_timestamp: timestamp,
+          },
+          time: { start: now, end: now },
+        },
+      },
+    ],
+  }
+}
+
+// ============================================================================
 // Plugin
 // ============================================================================
 
@@ -276,18 +356,38 @@ const plugin: Plugin = async (ctx) => {
               log.warn(LOG.TOOL, `broadcast unknown recipient`, { alias, to: targetAlias })
               return broadcastUnknownRecipient(targetAlias, knownAgents)
             }
+            // Skip sending to yourself
+            if (recipientSessionId === sessionId) {
+              log.warn(LOG.TOOL, `Skipping self-message`, { alias, targetAlias })
+              continue
+            }
             recipientSessions.push(recipientSessionId)
           }
+          
+          if (recipientSessions.length === 0) {
+            return `No valid recipients. You cannot message yourself. Use announce to see parallel agents.`
+          }
+          
+          // Check if we're broadcasting to parent (to send notification)
+          const isTargetingParent = parentId && recipientSessions.includes(parentId)
           
           let messageId = ""
           for (const recipientSessionId of recipientSessions) {
             const msg = sendMessage(alias, recipientSessionId, args.message)
             messageId = msg.id
             
-            markMessagesFromSenderAsRead(sessionId, recipientSessionId)
+            log.info(LOG.MESSAGE, `Message queued for recipient`, { 
+              senderAlias: alias, 
+              senderSessionId: sessionId,
+              recipientSessionId,
+              messageId: msg.id,
+              messageLength: args.message.length,
+              isParent: recipientSessionId === parentId
+            })
           }
           
-          if (parentId && recipientSessions.includes(parentId)) {
+          // Only notify parent session (not siblings)
+          if (isTargetingParent) {
             log.info(LOG.MESSAGE, `Broadcasting to parent session, calling notify_once`, { sessionId, parentId })
             try {
               const internalClient = (client as any)._client
@@ -340,40 +440,58 @@ const plugin: Plugin = async (ctx) => {
       log.info(LOG.INJECT, `Injected IAM system prompt`, { sessionId })
     },
     
-    // Inject urgent notifications for unread messages
+    // NOTE: No longer injecting synthetic user messages for unread notifications
+    // Messages are now injected directly into recipient sessions as assistant messages with tool parts
+    // when broadcast is called
+    
+    // Inject assistant messages with tool parts for unread IAM messages
     "experimental.chat.messages.transform": async (_input, output) => {
       const lastUserMsg = [...output.messages].reverse().find(m => m.info.role === "user")
-      if (!lastUserMsg) return
+      if (!lastUserMsg) {
+        log.debug(LOG.INJECT, `No user message found in transform, skipping IAM injection`)
+        return
+      }
       
       const sessionId = lastUserMsg.info.sessionID
       const unread = getUnreadMessages(sessionId)
       
-      if (unread.length === 0) return
+      log.debug(LOG.INJECT, `Checking for unread messages in transform`, { sessionId, unreadCount: unread.length })
       
-      log.info(LOG.INJECT, `Injecting urgent notification`, { sessionId, unreadCount: unread.length })
-      
-      // Create synthetic user message with notification including full message details
-      const syntheticMessage = {
-        info: {
-          id: "msg_iam_" + Date.now(),
-          sessionID: sessionId,
-          role: "user" as const,
-          time: { created: Date.now() },
-          agent: (lastUserMsg.info as any).agent || "code",
-          model: (lastUserMsg.info as any).model,
-        },
-        parts: [
-          {
-            id: "prt_iam_" + Date.now(),
-            sessionID: sessionId,
-            messageID: "msg_iam_" + Date.now(),
-            type: "text" as const,
-            text: urgentNotification(unread.map(m => ({ from: m.from, body: m.body, timestamp: m.timestamp }))),
-          }
-        ]
+      if (unread.length === 0) {
+        return
       }
       
-      output.messages.push(syntheticMessage as any)
+      log.info(LOG.INJECT, `Injecting ${unread.length} assistant message(s) with tool parts`, { 
+        sessionId, 
+        unreadCount: unread.length,
+        messageIds: unread.map(m => m.id)
+      })
+      
+      // Inject one assistant message with tool part for each unread message
+      for (const msg of unread) {
+        const assistantMsg = createAssistantMessageWithToolPart(
+          sessionId,
+          msg.from,
+          msg.body,
+          msg.id,
+          msg.timestamp,
+          lastUserMsg
+        )
+        
+        output.messages.push(assistantMsg)
+        
+        log.info(LOG.INJECT, `Injected assistant message with tool part`, { 
+          sessionId,
+          senderAlias: msg.from,
+          messageId: assistantMsg.info.id,
+          partId: assistantMsg.parts[0].id
+        })
+        
+        // Mark as read after injection
+        msg.read = true
+      }
+      
+      log.info(LOG.INJECT, `Marked ${unread.length} messages as read after injection`, { sessionId })
     },
     
     // Add announce and broadcast to subagent_tools
