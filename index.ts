@@ -292,9 +292,13 @@ function sendMessage(
   body: string,
   isStatusAnnouncement = false,
 ): Message {
+  // Status announcements get msgIndex 0 (not replyable)
+  // Regular messages start at 1
+  const msgIndex = isStatusAnnouncement ? 0 : getNextMsgIndex(to);
+
   const message: Message = {
     id: generateId(),
-    msgIndex: getNextMsgIndex(to),
+    msgIndex,
     from,
     to,
     body,
