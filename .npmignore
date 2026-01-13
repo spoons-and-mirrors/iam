@@ -9,6 +9,9 @@ tsconfig.json
 # Dev/logs
 .logs/
 node_modules/
+.opencode/
 
 # Docs (optional - remove these lines if you want them in the package)
 PROGRESS.md
+
+repomix-output.xml

@@ -1,42 +1,103 @@
-# IAM Plugin for OpenCode
+# IAM (Inter-Agent Messaging)
 
-Lets parallel subagents talk to each other. No configuration needed — just install and it works.
-
-## What It Does
-
-When you spawn multiple agents with the `task` tool, they can:
-- **Announce** what they're working on (and see all parallel agents)
-- **Broadcast** messages to one, some, or all agents
-- Get **notified** when new messages arrive
+Enable parallel agents to communicate with each other in OpenCode.
 
 ## How It Works
 
-Agents get friendly names (agentA, agentB, ...) and automatically discover each other.
+When you spawn multiple agents with the Task tool, they can send messages to each other using `broadcast`. Messages appear in each agent's context automatically.
 
-When an agent announces, the response shows all other parallel agents — whether they've announced yet or not. This gives agents instant awareness of who's working alongside them. Agents can re-announce to update their status.
+```mermaid
+sequenceDiagram
+    participant Parent as Parent Session
+    participant A as AgentA
+    participant B as AgentB
 
-When an agent completes their task, they're encouraged to broadcast a completion message so others know.
+    Parent->>A: spawn task
+    Parent->>B: spawn task
 
-The plugin injects IAM instructions into the **system prompt** for child sessions only (sessions with a `parentID`).
+    Note over A,B: Both agents auto-register on first LLM call
 
-## Actions
+    A->>B: broadcast(recipient="agentB", message="Question?")
 
-| Action | Description |
-|--------|-------------|
-| `announce` | Declare what you're working on. Shows all parallel agents. Can re-announce to update. |
-| `read` | Read your inbox (marks messages as read). |
-| `broadcast` | Send a message. Use `to` for specific agent(s), or omit for all. |
+    Note over B: Receives message
+    Note over B: Responds
 
-## Examples
+    B->>A: broadcast(recipient="agentA", reply_to="1", message="Answer!")
+
+    Note over A: Receives reply
+    Note over B: Tool output shows both reply and handled message
+    Note over B: Remove message from inbox
+```
+
+## The `broadcast` Tool
 
 ```
-# Announce what you're doing (also shows parallel agents)
-action="announce", message="Refactoring the auth module"
-
-# Message everyone
-action="broadcast", message="Found a bug in config.ts, heads up"
-
-# Message specific agent(s)
-action="broadcast", to="agentA", message="Can you check auth.ts?"
-action="broadcast", to="agentA,agentC", message="Sync up on API changes"
+broadcast(message="...")                              # Send to all agents
+broadcast(recipient="agentB", message="...")          # Send to specific agent
+broadcast(reply_to="1,2", message="...")              # Mark messages as handled
+broadcast(recipient="agentA", reply_to="1", message="...") # Reply and mark handled
 ```
+
+### Parameters
+
+| Parameter   | Required | Description                                               |
+| ----------- | -------- | --------------------------------------------------------- |
+| `message`   | Yes      | Your message content                                      |
+| `recipient` | No       | Target agent(s), comma-separated. Omit to send to all     |
+| `reply_to`  | No       | Message IDs to mark as handled (e.g., `"1"` or `"1,2,3"`) |
+
+## Receiving Messages
+
+Messages appear in an agent's context as a bundled inbox:
+
+```
+INCOMING MESSAGES (2)
+
+--- Message #1 from agentA ---
+What's the status on the API?
+
+--- Message #2 from agentA ---
+Also, can you check the tests?
+
+---
+To respond: broadcast(recipient="agentA", reply_to="1,2", message="...")
+```
+
+Messages persist in the inbox until the agent marks them as handled using `reply_to`.
+
+## Installation
+
+Add to your OpenCode config:
+
+```yaml
+plugins:
+  - name: iam
+    module: "@spoons-and-mirrors/iam"
+```
+
+The plugin automatically makes `broadcast` available to all task agents.
+
+## Example Workflow
+
+```
+# Parent spawns two agents to work on different parts of a feature
+
+AgentA (working on frontend):
+  → broadcast(message="Starting frontend work")
+  → ... does work ...
+  → broadcast(recipient="agentB", message="Need the API schema")
+
+AgentB (working on backend):
+  → broadcast(message="Starting backend work")
+  → ... sees AgentA's question in inbox ...
+  → broadcast(recipient="agentA", reply_to="1", message="Here's the schema: {...}")
+
+AgentA:
+  → ... sees AgentB's response in inbox ...
+  → broadcast(reply_to="1", message="Got it, thanks!")
+```
+
+## Notes
+
+- Agents are assigned aliases automatically: `agentA`, `agentB`, `agentC`, etc.
+- Logs are written to `.logs/iam.log` for debugging
