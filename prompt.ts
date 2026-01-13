@@ -4,6 +4,8 @@
 
 export const BROADCAST_DESCRIPTION = `Communicate with other parallel agents. Use 'send_to' for a specific agent, or omit to message all. Use 'reply_to' to reply (auto-wires recipient to sender).`;
 
+export const SPAWN_DESCRIPTION = `Spawn a new sibling agent to work on a task in parallel. The new agent joins the IAM network and can communicate via broadcast. Returns immediately (fire-and-forget).`;
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -84,6 +86,20 @@ export function broadcastUnknownRecipient(
   return `Error: Unknown recipient "${recipient}". ${list}`;
 }
 
+export function spawnResult(
+  spawnedAlias: string,
+  sessionId: string,
+  description: string,
+): string {
+  return `Spawned ${spawnedAlias} (session: ${sessionId})
+Task: ${description}
+The agent is now running in parallel and can be reached via broadcast.`;
+}
+
+export const SPAWN_NOT_CHILD_SESSION = `Error: spawn can only be called from a subagent session (a session with a parentID). Main sessions should use the 'task' tool directly.`;
+
+export const SPAWN_MISSING_PROMPT = `Error: 'prompt' parameter is required.`;
+
 // =============================================================================
 // System prompt injection
 // =============================================================================
@@ -93,6 +109,7 @@ export const SYSTEM_PROMPT = `
 # Inter-Agent Messaging
 
 Use \`broadcast\` to communicate with other parallel agents.
+Use \`spawn\` to create new sibling agents for parallel work.
 
 ## IMPORTANT: Announce Yourself First
 Your first action should be calling \`broadcast(message="what you're working on")\` to announce yourself. Until you do, other agents won't know your purpose. The synthetic tool result will show a hint reminding you to announce.
@@ -100,6 +117,11 @@ Your first action should be calling \`broadcast(message="what you're working on"
 ## Sending Messages
 - \`broadcast(message="...")\` → announce yourself or send to all agents
 - \`broadcast(send_to="agentB", message="...")\` → send to specific agent
+
+## Spawning Agents
+- \`spawn(prompt="...", description="...")\` → create a sibling agent
+- The spawned agent joins the IAM network and can use broadcast
+- spawn() returns immediately; the agent runs in parallel
 
 ## Receiving Messages
 Incoming messages appear as synthetic \`broadcast\` tool results:

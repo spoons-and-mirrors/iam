@@ -17,10 +17,6 @@ sequenceDiagram
 
     Note over A,B: Attention mechanism activation
 
-    A->>B: broadcast(message="Doing X")
-    Note over B: Get announcement in synthetic tool result
-
-
     A->>B: broadcast(send_to="agentB", message="Question?")
     A->>B: broadcast(send_to="agentB", message="Other question?")
 
@@ -56,6 +52,48 @@ broadcast(reply_to=1, message="...")         # Reply to message #1 (auto-wires r
 | `message`  | Yes      | Your message content                                            |
 | `send_to`  | No       | Target agent (single agent only)                                |
 | `reply_to` | No       | Message ID to reply to - auto-wires recipient to message sender |
+
+## The `spawn` Tool
+
+Subagents can spawn new sibling agents to work on tasks in parallel. The spawned agent joins the IAM network and can communicate via `broadcast`.
+
+```
+spawn(prompt="Build the login form", description="Login UI")
+```
+
+### Parameters
+
+| Parameter     | Required | Description                                |
+| ------------- | -------- | ------------------------------------------ |
+| `prompt`      | Yes      | The task for the new agent to perform      |
+| `description` | No       | Short description (3-5 words) for the task |
+
+### How It Works
+
+1. Subagent A calls `spawn(prompt="...", description="...")`
+2. A new sibling session is created (child of the same parent as A)
+3. The spawned agent is pre-registered with IAM
+4. `spawn()` returns immediately (fire-and-forget)
+5. The spawned agent can use `broadcast` to communicate
+
+```mermaid
+sequenceDiagram
+    participant Parent as Parent Session
+    participant A as AgentA
+    participant C as AgentC (spawned)
+
+    Parent->>A: spawn task via task tool
+    Note over A: AgentA needs help
+
+    A->>Parent: spawn(prompt="Help with X")
+    Parent->>C: Create sibling session
+    Note over C: AgentC starts working
+
+    C->>A: broadcast(message="Working on X")
+    A->>C: broadcast(send_to="agentC", message="Thanks!")
+```
+
+**Note:** `spawn` can only be called from subagent sessions (sessions with a parentID). Main sessions should use the built-in `task` tool directly.
 
 ## Receiving Messages
 
