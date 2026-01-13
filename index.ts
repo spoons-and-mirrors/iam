@@ -138,6 +138,9 @@ const sessionMsgCounter = new Map<string, number>();
 // Track ALL active sessions
 const activeSessions = new Set<string>();
 
+// Track sessions that have announced themselves (called broadcast at least once)
+const announcedSessions = new Set<string>();
+
 // Alias mappings: sessionId <-> alias (e.g., "agentA", "agentB")
 const sessionToAlias = new Map<string, string>();
 const aliasToSession = new Map<string, string>();
@@ -622,7 +625,10 @@ const plugin: Plugin = async (ctx) => {
         },
         async execute(args, context: ToolContext) {
           const sessionId = context.sessionID;
-          const isFirstCall = !activeSessions.has(sessionId);
+
+          // Check if this is the first broadcast call (agent announcing themselves)
+          // This is separate from session registration which happens earlier in system.transform
+          const isFirstCall = !announcedSessions.has(sessionId);
 
           // Register if not already (should already be registered via system.transform)
           registerSession(sessionId);
@@ -659,9 +665,12 @@ const plugin: Plugin = async (ctx) => {
             isFirstCall,
           });
 
-          // Use message as status description (only on first call)
-          // First call is a status announcement - SEND to all agents but mark as status
-          if (isFirstCall) {
+          // First call logic: announce the agent
+          // BUT if reply_to is provided, skip status announcement and treat as normal reply
+          if (isFirstCall && args.reply_to === undefined) {
+            // Mark this session as having announced
+            announcedSessions.add(sessionId);
+
             setDescription(sessionId, messageContent);
 
             const knownAgents = getKnownAliases(sessionId);
@@ -684,6 +693,19 @@ const plugin: Plugin = async (ctx) => {
               knownAgents,
               parallelAgents,
               undefined,
+            );
+          }
+
+          // If first call but has reply_to, still mark as announced but process as normal reply
+          if (isFirstCall) {
+            announcedSessions.add(sessionId);
+            log.info(
+              LOG.TOOL,
+              `First broadcast with reply_to - treating as normal reply`,
+              {
+                alias,
+                reply_to: args.reply_to,
+              },
             );
           }
 

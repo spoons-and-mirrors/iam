@@ -37,7 +37,7 @@ export function broadcastResult(
 
   // AGENTS LIST AT THE TOP - most important info
   if (parallelAgents.length > 0) {
-    lines.push(`Available agents to message:`);
+    lines.push(`Available agents:`);
     for (const agent of parallelAgents) {
       if (agent.description) {
         lines.push(`  - ${agent.alias}: ${agent.description}`);
@@ -49,25 +49,21 @@ export function broadcastResult(
     lines.push(`No other agents available yet.`);
   }
 
-  // Message confirmation
-  if (recipients.length > 0) {
-    lines.push(``);
-    const recipientStr =
-      recipients.length === 1 ? recipients[0] : recipients.join(", ");
-    lines.push(`Message sent to: ${recipientStr}`);
-  }
-
-  // Show handled message
+  // Combined reply confirmation (when using reply_to)
   if (handledMessage) {
     lines.push(``);
     const preview =
       handledMessage.body.length > 80
         ? handledMessage.body.substring(0, 80) + "..."
         : handledMessage.body;
-    lines.push(
-      `Marked as handled: #${handledMessage.id} from ${handledMessage.from}`,
-    );
+    lines.push(`Replied to #${handledMessage.id} from ${handledMessage.from}:`);
     lines.push(`  "${preview}"`);
+  } else if (recipients.length > 0) {
+    // Regular message (no reply_to)
+    lines.push(``);
+    const recipientStr =
+      recipients.length === 1 ? recipients[0] : recipients.join(", ");
+    lines.push(`Message sent to: ${recipientStr}`);
   }
 
   return lines.join("\n");
