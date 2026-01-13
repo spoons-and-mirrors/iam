@@ -11,6 +11,7 @@ import {
   SYSTEM_PROMPT,
   type ParallelAgent,
   type InboxMessage,
+  type HandledMessage,
 } from "./prompt";
 import { log, LOG } from "./logger";
 
@@ -327,13 +328,17 @@ function getUnhandledMessages(sessionId: string): PendingMessage[] {
 function markMessagesAsHandled(
   sessionId: string,
   msgIndices: number[],
-): number {
+): HandledMessage[] {
   const queue = getMessageQueue(sessionId);
-  let count = 0;
+  const handled: HandledMessage[] = [];
   for (const msg of queue) {
     if (msgIndices.includes(msg.msgIndex) && !msg.handled) {
       msg.handled = true;
-      count++;
+      handled.push({
+        id: msg.msgIndex,
+        from: msg.from,
+        body: msg.body,
+      });
       log.info(LOG.MESSAGE, `Message marked as handled`, {
         sessionId,
         msgIndex: msg.msgIndex,
@@ -341,7 +346,7 @@ function markMessagesAsHandled(
       });
     }
   }
-  return count;
+  return handled;
 }
 
 function getKnownAliases(sessionId: string): string[] {
@@ -617,7 +622,7 @@ const plugin: Plugin = async (ctx) => {
           });
 
           // Handle reply_to - mark messages as handled
-          let handledCount = 0;
+          let handledMessages: HandledMessage[] = [];
           if (args.reply_to) {
             const msgIndices = args.reply_to
               .split(",")
@@ -625,11 +630,11 @@ const plugin: Plugin = async (ctx) => {
               .filter((n) => !isNaN(n));
 
             if (msgIndices.length > 0) {
-              handledCount = markMessagesAsHandled(sessionId, msgIndices);
+              handledMessages = markMessagesAsHandled(sessionId, msgIndices);
               log.info(LOG.TOOL, `Handled messages via reply_to`, {
                 alias,
                 requested: msgIndices,
-                actuallyHandled: handledCount,
+                actuallyHandled: handledMessages.length,
               });
             }
           }
@@ -653,7 +658,7 @@ const plugin: Plugin = async (ctx) => {
             log.info(LOG.TOOL, `No recipients, returning agent info`, {
               alias,
             });
-            return broadcastResult(alias, [], parallelAgents, handledCount);
+            return broadcastResult(alias, [], parallelAgents, handledMessages);
           }
 
           const parentId = await getParentId(client, sessionId);
@@ -687,7 +692,7 @@ const plugin: Plugin = async (ctx) => {
             log.info(LOG.TOOL, `No valid recipients after filtering`, {
               alias,
             });
-            return broadcastResult(alias, [], parallelAgents, handledCount);
+            return broadcastResult(alias, [], parallelAgents, handledMessages);
           }
 
           // Check if we're broadcasting to parent
@@ -732,7 +737,7 @@ const plugin: Plugin = async (ctx) => {
             alias,
             validTargets,
             parallelAgents,
-            handledCount,
+            handledMessages,
           );
         },
       }),

@@ -19,11 +19,14 @@ sequenceDiagram
 
     A->>B: broadcast(recipient="agentB", message="Question?")
 
-    Note over B: Message appears in agentB's inbox
+    Note over B: Receives message
+    Note over B: Responds
 
     B->>A: broadcast(recipient="agentA", reply_to="1", message="Answer!")
 
-    Note over B: Message #1 marked as handled
+    Note over A: Receives reply
+    Note over B: Tool output shows both reply and handled message
+    Note over B: Remove message from inbox
 ```
 
 ## The `broadcast` Tool

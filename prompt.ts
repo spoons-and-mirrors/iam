@@ -20,6 +20,12 @@ export interface InboxMessage {
   timestamp: number;
 }
 
+export interface HandledMessage {
+  id: number;
+  from: string;
+  body: string;
+}
+
 // =============================================================================
 // Tool output messages
 // =============================================================================
@@ -28,7 +34,7 @@ export function broadcastResult(
   alias: string,
   recipients: string[],
   parallelAgents: ParallelAgent[],
-  handledCount: number,
+  handledMessages: HandledMessage[],
 ): string {
   const lines: string[] = [];
 
@@ -43,9 +49,15 @@ export function broadcastResult(
     lines.push(`Message sent to: ${recipientStr}`);
   }
 
-  // Show handled confirmation
-  if (handledCount > 0) {
-    lines.push(`Marked ${handledCount} message(s) as handled.`);
+  // Show handled messages with their content (so LLM knows what it replied to)
+  if (handledMessages.length > 0) {
+    lines.push(``);
+    lines.push(`--- Replied to ${handledMessages.length} message(s) ---`);
+    for (const msg of handledMessages) {
+      const preview =
+        msg.body.length > 80 ? msg.body.substring(0, 80) + "..." : msg.body;
+      lines.push(`#${msg.id} from ${msg.from}: "${preview}"`);
+    }
   }
 
   // Show other agents
