@@ -17,23 +17,18 @@ sequenceDiagram
 
     Note over A,B: Attention mechanism activation
 
-    A->>B: broadcast(message="Doing X") notifies all parallel agents
-    Note over A: Tool result shows agentB is available
+    A->>B: broadcast(message="Doing X")
+    Note over B: Get announcement in synthetic tool result
 
-    B->>A: broadcast(message="Doing Y") notifies all parallel agents
-    Note over B: Tool result shows agentA is available
-
-    Note over A,B: Attention mechanism activated
 
     A->>B: broadcast(recipient="agentB", message="Question?")
     A->>B: broadcast(recipient="agentB", message="Other question?")
 
-    Note over B: Receive messages in context
+    Note over B: Get messages in synthetic tool result
 
     B->>A: broadcast(reply_to=1, message="Answer!")
     Note over B: Tool result shows source message
-    Note over B: Message 1 removed from context
-    Note over B: Audit trace persists in tool result
+    Note over B: Clear message 1 from synthetic
 
     Note over A: Receives reply
 ```

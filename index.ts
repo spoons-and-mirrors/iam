@@ -40,7 +40,6 @@ interface Message {
   body: string;
   timestamp: number;
   handled: boolean;
-  isStatusAnnouncement: boolean; // True for first broadcast (status only, not replyable)
 }
 
 // DORMANT: parent alias feature
@@ -153,6 +152,9 @@ const registeringSessionsLock = new Set<string>(); // Prevent race conditions
 // DORMANT: parent alias feature
 // Cache for parentID lookups with expiry
 const sessionParentCache = new Map<string, CachedParentId>();
+
+// Cache for child session checks (fast path)
+const childSessionCache = new Set<string>();
 
 // ============================================================================
 // Cleanup - prevent memory leaks
@@ -286,25 +288,15 @@ function getInbox(sessionId: string): Message[] {
 // Core messaging functions
 // ============================================================================
 
-function sendMessage(
-  from: string,
-  to: string,
-  body: string,
-  isStatusAnnouncement = false,
-): Message {
-  // Status announcements get msgIndex 0 (not replyable)
-  // Regular messages start at 1
-  const msgIndex = isStatusAnnouncement ? 0 : getNextMsgIndex(to);
-
+function sendMessage(from: string, to: string, body: string): Message {
   const message: Message = {
     id: generateId(),
-    msgIndex,
+    msgIndex: getNextMsgIndex(to),
     from,
     to,
     body,
     timestamp: Date.now(),
     handled: false,
-    isStatusAnnouncement,
   };
 
   const queue = getInbox(to);
@@ -328,7 +320,6 @@ function sendMessage(
     from,
     to,
     bodyLength: body.length,
-    isStatusAnnouncement,
   });
   return message;
 }
@@ -451,6 +442,27 @@ async function getParentId(
   }
 }
 
+/**
+ * Check if a session is a child session (has parentID).
+ * Uses cache for fast repeated checks.
+ */
+async function isChildSession(
+  client: OpenCodeSessionClient,
+  sessionId: string,
+): Promise<boolean> {
+  // Fast path: already confirmed as child session
+  if (childSessionCache.has(sessionId)) {
+    return true;
+  }
+
+  const parentId = await getParentId(client, sessionId);
+  if (parentId) {
+    childSessionCache.add(sessionId);
+    return true;
+  }
+  return false;
+}
+
 // ============================================================================
 // Helper to create bundled assistant message with inbox
 // ============================================================================
@@ -498,31 +510,30 @@ function createInboxMessage(
   sessionId: string,
   messages: Message[],
   baseUserMessage: UserMessage,
+  parallelAgents: ParallelAgent[],
 ): AssistantMessage {
   const now = Date.now();
   const userInfo = baseUserMessage.info;
 
-  // Separate status announcements from regular messages
-  const statusAnnouncements = messages.filter((m) => m.isStatusAnnouncement);
-  const regularMessages = messages.filter((m) => !m.isStatusAnnouncement);
-
   // Build structured output - this is what the LLM sees as the "tool result"
-  // Status announcements go in "agents" section (not replyable)
-  // Regular messages go in "messages" section (replyable via reply_to)
+  // Agents section shows available agents and their status (not replyable)
+  // Messages section shows replyable messages
   const outputData: {
-    agents?: Array<{ name: string; status: string }>;
+    agents?: Array<{ name: string; status?: string }>;
     messages?: Array<{ id: number; from: string; content: string }>;
   } = {};
 
-  if (statusAnnouncements.length > 0) {
-    outputData.agents = statusAnnouncements.map((m) => ({
-      name: m.from,
-      status: m.body,
+  // Build agents section from parallelAgents (status comes from agentDescriptions)
+  if (parallelAgents.length > 0) {
+    outputData.agents = parallelAgents.map((agent) => ({
+      name: agent.alias,
+      status: agent.description,
     }));
   }
 
-  if (regularMessages.length > 0) {
-    outputData.messages = regularMessages.map((m) => ({
+  // All messages in inbox are regular messages (replyable)
+  if (messages.length > 0) {
+    outputData.messages = messages.map((m) => ({
       id: m.msgIndex,
       from: m.from,
       content: m.body,
@@ -535,22 +546,23 @@ function createInboxMessage(
 
   // Build short title for UI display
   const titleParts: string[] = [];
-  if (statusAnnouncements.length > 0) {
-    titleParts.push(`${statusAnnouncements.length} agent(s)`);
+  if (parallelAgents.length > 0) {
+    titleParts.push(`${parallelAgents.length} agent(s)`);
   }
-  if (regularMessages.length > 0) {
-    titleParts.push(`${regularMessages.length} message(s)`);
+  if (messages.length > 0) {
+    titleParts.push(`${messages.length} message(s)`);
   }
   const title = titleParts.length > 0 ? titleParts.join(", ") : "Inbox";
 
   // Output is the structured data the LLM sees
   const output = JSON.stringify(outputData);
 
-  log.debug(LOG.MESSAGE, `Creating bundled inbox message`, {
+  log.info(LOG.MESSAGE, `Creating inbox injection`, {
     sessionId,
-    totalCount: messages.length,
-    statusCount: statusAnnouncements.length,
-    messageCount: regularMessages.length,
+    agents: parallelAgents.map((a) => a.alias),
+    agentStatuses: parallelAgents.map((a) => a.description?.substring(0, 50)),
+    messageIds: messages.map((m) => m.msgIndex),
+    messageFroms: messages.map((m) => m.from),
   });
 
   const result: AssistantMessage = {
@@ -587,9 +599,9 @@ function createInboxMessage(
           output,
           title,
           metadata: {
-            incoming_message: regularMessages.length > 0,
-            message_count: regularMessages.length,
-            status_count: statusAnnouncements.length,
+            incoming_message: messages.length > 0,
+            message_count: messages.length,
+            agent_count: parallelAgents.length,
           },
           time: { start: now, end: now },
         },
@@ -660,8 +672,7 @@ const plugin: Plugin = async (ctx) => {
           // Get parallel agents info early (needed for first call)
           const parallelAgents = getParallelAgents(sessionId);
 
-          log.debug(LOG.TOOL, `broadcast called`, {
-            sessionId,
+          log.info(LOG.TOOL, `broadcast called`, {
             alias,
             recipient: args.recipient,
             reply_to: args.reply_to,
@@ -679,18 +690,13 @@ const plugin: Plugin = async (ctx) => {
 
             const knownAgents = getKnownAliases(sessionId);
 
-            // Send status announcement to all agents
-            for (const targetAlias of knownAgents) {
-              const recipientSessionId = aliasToSession.get(targetAlias);
-              if (recipientSessionId) {
-                sendMessage(alias, recipientSessionId, messageContent, true); // true = isStatusAnnouncement
-              }
-            }
+            // Status is now stored in agentDescriptions - no need to send as message
+            // Other agents will see it via parallelAgents in the synthetic injection
 
-            log.info(LOG.TOOL, `First broadcast - sent status announcement`, {
+            log.info(LOG.TOOL, `First broadcast - status announcement`, {
               alias,
-              status: messageContent,
-              sentTo: knownAgents,
+              status: messageContent.substring(0, 80),
+              discoveredAgents: knownAgents,
             });
             return broadcastResult(
               alias,
@@ -805,9 +811,9 @@ const plugin: Plugin = async (ctx) => {
           const isTargetingParent =
             parentId && recipientSessions.includes(parentId);
 
-          // Send messages to all recipients (NOT status announcements)
+          // Send messages to all recipients
           for (const recipientSessionId of recipientSessions) {
-            sendMessage(alias, recipientSessionId, messageContent, false);
+            sendMessage(alias, recipientSessionId, messageContent);
           }
 
           // Notify parent session if targeted (DORMANT)
@@ -874,7 +880,7 @@ const plugin: Plugin = async (ctx) => {
     },
 
     // PRE-REGISTER agents on first LLM call + inject system prompt
-    // Only register child sessions (those with parentID)
+    // Only for child sessions (those with parentID)
     "experimental.chat.system.transform": async (
       input: SystemTransformInput,
       output: SystemTransformOutput,
@@ -888,24 +894,13 @@ const plugin: Plugin = async (ctx) => {
         return;
       }
 
-      // Check if this is a child session (has parentID)
-      try {
-        const result = await client.session.get({ path: { id: sessionId } });
-        if (!result.data?.parentID) {
-          log.debug(
-            LOG.INJECT,
-            `Session has no parentID (main session), skipping IAM`,
-            {
-              sessionId,
-            },
-          );
-          return;
-        }
-      } catch (e) {
-        log.debug(LOG.INJECT, `Failed to get session info, skipping IAM`, {
-          sessionId,
-          error: String(e),
-        });
+      // Only inject for child sessions (those with parentID)
+      if (!(await isChildSession(client, sessionId))) {
+        log.debug(
+          LOG.INJECT,
+          `Session has no parentID (main session), skipping IAM`,
+          { sessionId },
+        );
         return;
       }
 
@@ -925,6 +920,7 @@ const plugin: Plugin = async (ctx) => {
     },
 
     // Inject ONE bundled inbox message at the END of the chain
+    // Only for child sessions (those with parentID)
     "experimental.chat.messages.transform": async (
       _input: unknown,
       output: MessagesTransformOutput,
@@ -941,34 +937,52 @@ const plugin: Plugin = async (ctx) => {
       }
 
       const sessionId = lastUserMsg.info.sessionID;
+
+      // Only inject for child sessions (those with parentID)
+      if (!(await isChildSession(client, sessionId))) {
+        log.debug(LOG.INJECT, `Skipping messages.transform for main session`, {
+          sessionId,
+        });
+        return;
+      }
+
       const unhandled = getUnhandledMessages(sessionId);
+      const parallelAgents = getParallelAgents(sessionId);
 
       log.debug(LOG.INJECT, `Checking for messages in transform`, {
         sessionId,
         unhandledCount: unhandled.length,
+        parallelAgentCount: parallelAgents.length,
       });
 
-      // Only inject if there are messages to show
-      if (unhandled.length === 0) {
+      // Inject if there are messages OR other agents to show
+      if (unhandled.length === 0 && parallelAgents.length === 0) {
+        log.info(LOG.INJECT, `No agents or messages to inject`, {
+          sessionId,
+          alias: getAlias(sessionId),
+        });
         return;
       }
 
-      log.info(LOG.INJECT, `Injecting bundled inbox message`, {
+      log.info(LOG.INJECT, `Injecting synthetic broadcast`, {
         sessionId,
-        unhandledCount: unhandled.length,
-        msgIndices: unhandled.map((m) => m.msgIndex),
+        alias: getAlias(sessionId),
+        agentCount: parallelAgents.length,
+        agents: parallelAgents.map((a) => a.alias),
+        messageCount: unhandled.length,
+        messageIds: unhandled.map((m) => m.msgIndex),
       });
 
       // Create ONE bundled message with all pending messages
-      const inboxMsg = createInboxMessage(sessionId, unhandled, lastUserMsg);
+      const inboxMsg = createInboxMessage(
+        sessionId,
+        unhandled,
+        lastUserMsg,
+        parallelAgents,
+      );
 
       // Push at the END of the messages array (recency bias)
       output.messages.push(inboxMsg as unknown as UserMessage);
-
-      log.info(LOG.INJECT, `Injected inbox at end of message chain`, {
-        sessionId,
-        messageCount: unhandled.length,
-      });
     },
 
     // Add broadcast to subagent_tools
