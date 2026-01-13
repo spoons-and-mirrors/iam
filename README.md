@@ -6,8 +6,6 @@
 
 ## How It Works
 
-Parallel agents can send messages to each other using the `broadcast` tool. Messages are relayed to the proper agent's context.
-
 ```mermaid
 sequenceDiagram
     participant Parent as Parent Session
@@ -17,13 +15,15 @@ sequenceDiagram
     Parent->>A: spawn task
     Parent->>B: spawn task
 
-    A->>A: broadcast(message="Doing X")
+    Note over A,B: Attention mechanism activation
+
+    A->>B: broadcast(message="Doing X") notifies all parallel agents
     Note over A: Tool result shows agentB is available
 
-    B->>B: broadcast(message="Doing Y")
+    B->>A: broadcast(message="Doing Y") notifies all parallel agents
     Note over B: Tool result shows agentA is available
 
-    Note over A,B: Attention layer triggers
+    Note over A,B: Attention mechanism activated
 
     A->>B: broadcast(recipient="agentB", message="Question?")
     A->>B: broadcast(recipient="agentB", message="Other question?")
