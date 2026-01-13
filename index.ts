@@ -20,7 +20,7 @@ const CHAR_CODE_A = 65; // ASCII code for 'A'
 const ALPHABET_SIZE = 26;
 const MAX_DESCRIPTION_LENGTH = 100;
 const MESSAGE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-const MAX_INBOX_SIZE = 100; // Max messages per inbox
+const MAX_QUEUE_SIZE = 100; // Max messages per queue
 const PARENT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const CLEANUP_INTERVAL_MS = 60 * 1000; // Run cleanup every minute
 const DEFAULT_MODEL_ID = "gpt-4o-2024-08-06";
@@ -31,13 +31,13 @@ const MAX_MESSAGE_LENGTH = 10000; // Prevent excessively long messages
 // Types
 // ============================================================================
 
-interface Message {
+interface PendingMessage {
   id: string;
   from: string;
   to: string;
   body: string;
   timestamp: number;
-  read: boolean;
+  delivered: boolean;
 }
 
 interface CachedParentId {
@@ -125,8 +125,8 @@ interface ConfigTransformOutput {
 // In-memory message store
 // ============================================================================
 
-// Messages indexed by recipient session ID
-const inboxes = new Map<string, Message[]>();
+// Pending messages indexed by recipient session ID
+const pendingMessages = new Map<string, PendingMessage[]>();
 
 // Track ALL active sessions (simpler approach - register on first iam use)
 const activeSessions = new Set<string>();
@@ -151,38 +151,50 @@ function cleanupExpiredMessages(): void {
   const now = Date.now();
   let totalRemoved = 0;
 
-  for (const [sessionId, messages] of inboxes) {
+  for (const [sessionId, messages] of pendingMessages) {
     const before = messages.length;
 
-    // Remove expired messages (keep unread ones longer)
-    const filtered = messages.filter((m) => {
-      if (m.read) {
+    // Remove expired messages (keep undelivered ones longer)
+    const filtered = messages.filter((m: PendingMessage) => {
+      if (m.delivered) {
         return now - m.timestamp < MESSAGE_TTL_MS;
       }
-      // Keep unread messages 3x longer
+      // Keep undelivered messages 3x longer
       return now - m.timestamp < MESSAGE_TTL_MS * 3;
     });
 
     // Also trim to max size if needed
-    if (filtered.length > MAX_INBOX_SIZE) {
-      // Keep newest messages, remove oldest read ones first
-      const unread = filtered.filter((m) => !m.read);
-      const read = filtered.filter((m) => m.read);
-      read.sort((a, b) => b.timestamp - a.timestamp);
-      const kept = [
-        ...unread,
-        ...read.slice(0, MAX_INBOX_SIZE - unread.length),
-      ];
-      inboxes.set(sessionId, kept);
-      totalRemoved += before - kept.length;
+    if (filtered.length > MAX_QUEUE_SIZE) {
+      // Keep newest messages, remove oldest delivered ones first
+      const pending = filtered.filter((m: PendingMessage) => !m.delivered);
+      const delivered = filtered.filter((m: PendingMessage) => m.delivered);
+      delivered.sort(
+        (a: PendingMessage, b: PendingMessage) => b.timestamp - a.timestamp,
+      );
+
+      // Fix: Handle case where pending alone exceeds limit
+      if (pending.length > MAX_QUEUE_SIZE) {
+        pending.sort(
+          (a: PendingMessage, b: PendingMessage) => b.timestamp - a.timestamp,
+        );
+        pendingMessages.set(sessionId, pending.slice(0, MAX_QUEUE_SIZE));
+        totalRemoved += before - MAX_QUEUE_SIZE;
+      } else {
+        const kept = [
+          ...pending,
+          ...delivered.slice(0, MAX_QUEUE_SIZE - pending.length),
+        ];
+        pendingMessages.set(sessionId, kept);
+        totalRemoved += before - kept.length;
+      }
     } else {
-      inboxes.set(sessionId, filtered);
+      pendingMessages.set(sessionId, filtered);
       totalRemoved += before - filtered.length;
     }
 
-    // Remove empty inboxes
-    if (inboxes.get(sessionId)!.length === 0) {
-      inboxes.delete(sessionId);
+    // Remove empty queues
+    if (pendingMessages.get(sessionId)!.length === 0) {
+      pendingMessages.delete(sessionId);
     }
   }
 
@@ -250,42 +262,42 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 10);
 }
 
-function getInbox(sessionId: string): Message[] {
-  if (!inboxes.has(sessionId)) {
-    inboxes.set(sessionId, []);
+function getMessageQueue(sessionId: string): PendingMessage[] {
+  if (!pendingMessages.has(sessionId)) {
+    pendingMessages.set(sessionId, []);
   }
-  return inboxes.get(sessionId)!;
+  return pendingMessages.get(sessionId)!;
 }
 
 // ============================================================================
 // Core messaging functions
 // ============================================================================
 
-function sendMessage(from: string, to: string, body: string): Message {
-  const message: Message = {
+function sendMessage(from: string, to: string, body: string): PendingMessage {
+  const message: PendingMessage = {
     id: generateId(),
     from,
     to,
     body,
     timestamp: Date.now(),
-    read: false,
+    delivered: false,
   };
 
-  const inbox = getInbox(to);
+  const queue = getMessageQueue(to);
 
-  // Enforce max inbox size
-  if (inbox.length >= MAX_INBOX_SIZE) {
-    // Remove oldest read message, or oldest message if all unread
-    const readIndex = inbox.findIndex((m) => m.read);
-    if (readIndex !== -1) {
-      inbox.splice(readIndex, 1);
+  // Enforce max queue size
+  if (queue.length >= MAX_QUEUE_SIZE) {
+    // Remove oldest delivered message, or oldest message if all pending
+    const deliveredIndex = queue.findIndex((m) => m.delivered);
+    if (deliveredIndex !== -1) {
+      queue.splice(deliveredIndex, 1);
     } else {
-      inbox.shift(); // Remove oldest
+      queue.shift(); // Remove oldest
     }
-    log.warn(LOG.MESSAGE, `Inbox full, removed oldest message`, { to });
+    log.warn(LOG.MESSAGE, `Queue full, removed oldest message`, { to });
   }
 
-  inbox.push(message);
+  queue.push(message);
   log.info(LOG.MESSAGE, `Message sent`, {
     id: message.id,
     from,
@@ -295,8 +307,8 @@ function sendMessage(from: string, to: string, body: string): Message {
   return message;
 }
 
-function getUnreadMessages(sessionId: string): Message[] {
-  return getInbox(sessionId).filter((m) => !m.read);
+function getUndeliveredMessages(sessionId: string): PendingMessage[] {
+  return getMessageQueue(sessionId).filter((m) => !m.delivered);
 }
 
 function getKnownAliases(sessionId: string): string[] {
@@ -780,29 +792,29 @@ const plugin: Plugin = async (ctx) => {
       }
 
       const sessionId = lastUserMsg.info.sessionID;
-      const unread = getUnreadMessages(sessionId);
+      const undelivered = getUndeliveredMessages(sessionId);
 
-      log.debug(LOG.INJECT, `Checking for unread messages in transform`, {
+      log.debug(LOG.INJECT, `Checking for undelivered messages in transform`, {
         sessionId,
-        unreadCount: unread.length,
+        undeliveredCount: undelivered.length,
       });
 
-      if (unread.length === 0) {
+      if (undelivered.length === 0) {
         return;
       }
 
       log.info(
         LOG.INJECT,
-        `Injecting ${unread.length} assistant message(s) with tool parts`,
+        `Injecting ${undelivered.length} assistant message(s) with tool parts`,
         {
           sessionId,
-          unreadCount: unread.length,
-          messageIds: unread.map((m) => m.id),
+          undeliveredCount: undelivered.length,
+          messageIds: undelivered.map((m) => m.id),
         },
       );
 
-      // Inject one assistant message with tool part for each unread message
-      for (const msg of unread) {
+      // Inject one assistant message with tool part for each undelivered message
+      for (const msg of undelivered) {
         const assistantMsg = createAssistantMessageWithToolPart(
           sessionId,
           msg.from,
@@ -822,13 +834,13 @@ const plugin: Plugin = async (ctx) => {
           partId: assistantMsg.parts[0].id,
         });
 
-        // Mark as read after injection
-        msg.read = true;
+        // Mark as delivered after injection
+        msg.delivered = true;
       }
 
       log.info(
         LOG.INJECT,
-        `Marked ${unread.length} messages as read after injection`,
+        `Marked ${undelivered.length} messages as delivered after injection`,
         {
           sessionId,
         },
