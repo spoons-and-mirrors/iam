@@ -471,10 +471,10 @@ interface AssistantMessage {
     tool: string;
     state: {
       status: string;
-      input: { count: number };
+      input: Record<string, unknown>;
       output: string;
       title: string;
-      metadata: { iam_inbox: boolean; message_count: number };
+      metadata: Record<string, unknown>;
       time: { start: number; end: number };
     };
   }>;
@@ -497,9 +497,9 @@ function createInboxMessage(
 
   const content = buildInboxContent(inboxMsgs);
 
-  const assistantMessageId = `msg_iam_inbox_${now}`;
-  const partId = `prt_iam_inbox_${now}`;
-  const callId = `call_iam_inbox_${now}`;
+  const assistantMessageId = `msg_broadcast_${now}`;
+  const partId = `prt_broadcast_${now}`;
+  const callId = `call_broadcast_${now}`;
 
   log.debug(LOG.MESSAGE, `Creating bundled inbox message`, {
     sessionId,
@@ -534,14 +534,14 @@ function createInboxMessage(
         messageID: assistantMessageId,
         type: "tool",
         callID: callId,
-        tool: "iam_inbox",
+        tool: "broadcast",
         state: {
           status: "completed",
-          input: { count: messages.length },
-          output: content,
+          input: { message: content },
+          output: `Received ${messages.length} message(s)`,
           title: `📨 Inbox (${messages.length} messages)`,
           metadata: {
-            iam_inbox: true,
+            incoming_message: true,
             message_count: messages.length,
           },
           time: { start: now, end: now },
