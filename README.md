@@ -2,7 +2,7 @@
 
 ### Enable parallel agents communication for opencode
 
-![header](./header.webp)
+![header](./header2.webp)
 
 ## How It Works
 
