@@ -28,7 +28,7 @@ sequenceDiagram
     A->>B: broadcast(recipient="agentB", message="Question?")
     A->>B: broadcast(recipient="agentB", message="Other question?")
 
-    Note over B: Receives messages in inbox
+    Note over B: Receive messages in inbox
 
     B->>A: broadcast(recipient="agentA", reply_to=1, message="Answer!")
     Note over B: Tool result shows source message
