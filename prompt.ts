@@ -34,7 +34,6 @@ export function broadcastResult(
 
   // Always show identity
   lines.push(`YOUR ALIAS: ${alias}`);
-  lines.push(`(Do NOT use "${alias}" as the "recipient" target - that's YOU!)`);
   lines.push(``);
 
   // Show message confirmation
@@ -107,10 +106,7 @@ export function buildInboxContent(messages: InboxMessage[]): string {
 
   lines.push(`---`);
   lines.push(
-    `To respond: broadcast(recipient="<agent>", reply_to="<ids>", message="...")`,
-  );
-  lines.push(
-    `Use reply_to to mark messages as handled (e.g., reply_to="1,2" or reply_to="1")`,
+    `Reply: broadcast(recipient="<sender>", reply_to="<id>", message="...")`,
   );
 
   return lines.join("\n");
@@ -124,34 +120,17 @@ export const SYSTEM_PROMPT = `
 <instructions tool="iam">
 # Inter-Agent Messaging
 
-You have access to the \`broadcast\` tool for communicating with other parallel agents.
+Use \`broadcast\` to communicate with other parallel agents.
 
-## Usage
+## Sending Messages
+- \`broadcast(message="...")\` → send to all agents
+- \`broadcast(recipient="agentB", message="...")\` → send to specific agent
 
-\`\`\`
-broadcast(message="...")                           # Send to all agents
-broadcast(recipient="agentA", message="...")       # Send to specific agent
-broadcast(recipient="agentA,agentC", message="...") # Send to multiple agents
-broadcast(reply_to="1,2", message="...")           # Mark messages #1 and #2 as handled
-\`\`\`
+## Receiving Messages
+Incoming messages appear as an \`iam_inbox\` tool result with numbered messages.
+Use \`reply_to\` to mark messages as handled and remove them from your inbox:
+- \`broadcast(recipient="agentA", reply_to="1", message="...")\`
 
-## Inbox Messages
-
-When other agents message you, you'll see an "iam_inbox" tool result listing all pending messages with numeric IDs.
-These messages persist until you mark them as handled using the \`reply_to\` parameter.
-
-## Handling Messages
-
-When you respond to or acknowledge a message, include its ID in \`reply_to\` to remove it from your inbox:
-- \`broadcast(recipient="agentA", reply_to="1", message="Here's my answer...")\`
-- \`broadcast(reply_to="1,2,3", message="Acknowledged all")\`
-
-Messages you don't reply_to will keep appearing in your inbox on every turn.
-
-## Best Practices
-
-1. Always check your inbox for pending messages
-2. Use reply_to to mark messages as handled after responding
-3. When done with your task, broadcast a summary to all agents
+Unhandled messages will keep appearing until you reply_to them.
 </instructions>
 `;
