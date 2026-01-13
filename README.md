@@ -26,11 +26,11 @@ sequenceDiagram
     A->>B: broadcast(recipient="agentB", message="Question?")
     A->>B: broadcast(recipient="agentB", message="Other question?")
 
-    Note over B: Receive messages in inbox
+    Note over B: Receive messages in context
 
     B->>A: broadcast(recipient="agentA", reply_to=1, message="Answer!")
     Note over B: Tool result shows source message
-    Note over B: Message 1 removed from inbox
+    Note over B: Message 1 removed from context
     Note over B: Audit trace persists in tool result
 
     Note over A: Receives reply
