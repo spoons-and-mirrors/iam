@@ -1398,10 +1398,30 @@ const plugin: Plugin = async (ctx) => {
           // Wait for all pending spawns to become idle
           await Promise.all(spawnIds.map(waitForSessionIdle));
 
-          log.info(LOG.SESSION, `session.before_complete: spawns completed`, {
+          // Check which spawns are truly done (idle AND no unread messages)
+          // If a spawn has unread messages, it will be resumed (via auto-resume logic in its own thread)
+          // so we must keep waiting for it.
+          const doneSpawns = spawnIds.filter((id) => {
+            const unread = getMessagesNeedingResume(id);
+            return unread.length === 0;
+          });
+
+          // Remove truly done spawns
+          for (const doneId of doneSpawns) {
+            pendingSpawns.delete(doneId);
+          }
+
+          // If pendingSpawns is empty, clean up the map entry
+          if (pendingSpawns.size === 0) {
+            callerPendingSpawns.delete(input.sessionID);
+          }
+
+          log.info(LOG.SESSION, `session.before_complete: spawns checked`, {
             sessionID: input.sessionID,
             alias,
-            completedSpawns: spawnIds,
+            totalSpawns: spawnIds.length,
+            doneSpawns: doneSpawns.length,
+            remainingSpawns: pendingSpawns.size,
           });
 
           // Continue loop to check for messages that may have arrived
@@ -2063,25 +2083,24 @@ const plugin: Plugin = async (ctx) => {
                   await markSpawnCompleted(client, spawn, spawnOutput);
                 }
 
-                // 4. Remove from caller's pending spawns
-                const callerSpawnsAfter = callerPendingSpawns.get(sessionId);
-                if (callerSpawnsAfter) {
-                  callerSpawnsAfter.delete(newSessionId);
-                  log.info(LOG.TOOL, `spawn removed from caller pending`, {
-                    callerSessionId: sessionId,
-                    spawnedSessionId: newSessionId,
-                    remainingSpawns: callerSpawnsAfter.size,
-                  });
-                  if (callerSpawnsAfter.size === 0) {
-                    callerPendingSpawns.delete(sessionId);
-                  }
-                }
-
                 // 5. Pipe the spawn output to the caller (agentA)
                 // If caller is idle: resume with the output
                 // If caller is active: send as broadcast message (will be injected via transform)
                 const callerState = sessionStates.get(sessionId);
                 const callerAlias = sessionToAlias.get(sessionId) || "caller";
+
+                // 4. DON'T remove from caller's pending spawns yet!
+                // The spawn might get resumed (via broadcast) and spawn more agents.
+                // We'll remove it in session.before_complete when we're truly done.
+                log.info(
+                  LOG.TOOL,
+                  `spawn completed, still tracked for caller`,
+                  {
+                    callerSessionId: sessionId,
+                    spawnedSessionId: newSessionId,
+                    callerAlias,
+                  },
+                );
 
                 // Create a summary message with the spawn output
                 const outputMessage = `[Spawn completed: ${newAlias}]\n${spawnOutput}`;
