@@ -15,6 +15,8 @@ Parallel subagents are powerful but notoriously unreliable. Work gets orphaned. 
 
 Within a single main session call, an entire universe of parallel work can unfold — agents spawning agents, communicating, coordinating — and the main session observes it all complete before moving on. No orphaned work. No lost context. No wasted compute. No guarantee this actually helps anything, but it's worth trying.
 
+If you want background agents, open a new opencode session. If you want want async subagent with proper callback management within a main thread block, use this.
+
 ---
 
 ## How It Works
