@@ -12,6 +12,6 @@
     "rootDir": ".",
     "types": ["bun-types"]
   },
-  "include": ["index.ts", "prompt.ts", "logger.ts"],
+  "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
