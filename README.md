@@ -1,106 +1,112 @@
-# IAM (Inter-Agent Messaging)
-
-### Enable parallel agents communication for opencode
+# An Agentic Pocket Universe
 
 ![header](./header2.webp)
 
-## How It Works
+## Overview
+
+IAM enables parallel agents to communicate, spawn sibling agents, and coordinate work. The main session automatically waits for all spawned work to complete.
 
 ```mermaid
 sequenceDiagram
-    participant Parent as Parent Session
+    participant Main as Main Session
     participant A as AgentA
-    participant B as AgentB
+    participant B as AgentB (spawned)
 
-    Parent->>A: spawn task
-    Parent->>B: spawn task
+    Main->>A: task tool
+    Note over A: AgentA starts work
 
-    Note over A,B: Attention mechanism activation
+    A->>B: spawn(prompt="...")
+    Note over A: Returns immediately (fire-and-forget)
+    Note over B: AgentB works in parallel
 
-    A->>B: broadcast(send_to="agentB", message="Question?")
-    A->>B: broadcast(send_to="agentB", message="Other question?")
+    A->>A: Continues own work
+    A->>A: Finishes, about to complete
 
-    Note over B: Get messages in synthetic tool result
+    Note over A: session.before_complete hook
+    Note over A: Waits for agentB...
 
-    B->>A: broadcast(reply_to=1, message="Answer!")
-    Note over B: Tool result shows source message
-    Note over B: Clear message 1 from synthetic
+    B-->>A: Completes, output piped as message
+    Note over A: Unread message detected
+    Note over A: Sets resumePrompt
 
-    Note over A: Receives reply
+    A->>A: Session resumed automatically
+    Note over A: Processes agentB's output
+
+    A-->>Main: Finally completes
+    Note over Main: Continues with full result
 ```
 
 ## Installation
-
-Add to your OpenCode config:
 
 ```
 "plugin": ["@spoons-and-mirrors/iam@latest"]
 ```
 
-## The `broadcast` Tool
+## Tools
+
+### `broadcast` - Inter-agent messaging
 
 ```
 broadcast(message="...")                     # Send to all agents
 broadcast(send_to="agentB", message="...")   # Send to specific agent
-broadcast(reply_to=1, message="...")         # Reply to message #1 (auto-wires recipient)
+broadcast(reply_to=1, message="...")         # Reply to message #1
 ```
 
-### Parameters
+| Parameter  | Required | Description                                   |
+| ---------- | -------- | --------------------------------------------- |
+| `message`  | Yes      | Your message content                          |
+| `send_to`  | No       | Target agent alias                            |
+| `reply_to` | No       | Message ID to reply to (auto-wires recipient) |
 
-| Parameter  | Required | Description                                                     |
-| ---------- | -------- | --------------------------------------------------------------- |
-| `message`  | Yes      | Your message content                                            |
-| `send_to`  | No       | Target agent (single agent only)                                |
-| `reply_to` | No       | Message ID to reply to - auto-wires recipient to message sender |
-
-## The `spawn` Tool
-
-Subagents can spawn new sibling agents to work on tasks in parallel. The spawned agent joins the IAM network and can communicate via `broadcast`.
+### `spawn` - Create sibling agents
 
 ```
 spawn(prompt="Build the login form", description="Login UI")
 ```
 
-### Parameters
+| Parameter     | Required | Description                   |
+| ------------- | -------- | ----------------------------- |
+| `prompt`      | Yes      | Task for the new agent        |
+| `description` | No       | Short description (3-5 words) |
 
-| Parameter     | Required | Description                                |
-| ------------- | -------- | ------------------------------------------ |
-| `prompt`      | Yes      | The task for the new agent to perform      |
-| `description` | No       | Short description (3-5 words) for the task |
+**Key behavior:**
 
-### How It Works
+- **Fire-and-forget**: `spawn()` returns immediately, caller continues working
+- **Output piping**: When spawned agent completes, its output is sent to caller as a message
+- **Main blocks**: The main session waits for ALL spawns and resumed sessions to complete
 
-1. Subagent A calls `spawn(prompt="...", description="...")`
-2. A new sibling session is created (child of the same parent as A)
-3. The spawned agent is pre-registered with IAM and can use `broadcast`
-4. The spawn appears as a "running" task in the parent's TUI
-5. `spawn()` **blocks** until the spawned agent completes
-6. The spawned agent's output is returned to the caller
-7. The spawn is marked "completed" in the parent's TUI
+## Session Lifecycle & Main Blocking
+
+The `session.before_complete` hook ensures main never continues until all work is done:
 
 ```mermaid
-sequenceDiagram
-    participant Parent as Parent Session
-    participant A as AgentA
-    participant C as AgentC (spawned)
-
-    Parent->>A: spawn task via task tool
-    Note over A: AgentA needs help
-
-    A->>C: spawn(prompt="Help with X")
-    Note over Parent: Task shows as "running"
-    Note over C: AgentC works on task
-
-    C-->>A: Agent output returned
-    Note over Parent: Task shows as "completed"
-    Note over A: Continues with result
+flowchart TD
+    A[Agent finishes work] --> B{Has pending spawns?}
+    B -->|Yes| C[Wait for spawns to complete]
+    C --> D[Spawns pipe output as messages]
+    D --> E{Has unread messages?}
+    B -->|No| E
+    E -->|Yes| F[Set resumePrompt]
+    F --> G[OpenCode resumes session]
+    G --> H[Agent processes messages]
+    H --> A
+    E -->|No| I[Session completes]
+    I --> J[Main continues]
 ```
 
-**Note:** `spawn` can only be called from subagent sessions (sessions with a parentID). Main sessions should use the built-in `task` tool directly.
+**How it works:**
+
+1. When an agent is about to complete, `session.before_complete` fires
+2. The hook waits for any pending spawns to become idle
+3. Spawned agents pipe their output to the caller as messages
+4. If unread messages exist, `resumePrompt` triggers a new prompt cycle
+5. The agent processes messages and the hook fires again
+6. Only when no spawns AND no messages remain does the session complete
+7. Main session continues with the full result
 
 ## Session Resumption
 
-When an agent goes idle (finishes processing) and later receives a broadcast message, IAM automatically **resumes** the idle session so it can process the new message. This enables asynchronous communication patterns where agents don't need to be actively waiting for messages.
+Idle agents are automatically resumed when they receive messages:
 
 ```mermaid
 sequenceDiagram
@@ -108,94 +114,100 @@ sequenceDiagram
     participant B as AgentB
 
     A->>A: Completes task, goes idle
-    Note over A: Status: idle
 
-    B->>A: broadcast(send_to="agentA", message="Question?")
-    Note over A: IAM detects idle + new message
-    A->>A: Session resumed automatically
-    Note over A: Status: active
+    B->>A: broadcast(message="Question?")
+    Note over A: Message arrives while idle
+
+    Note over A: session.before_complete detects message
+    A->>A: Resumed via resumePrompt
+    Note over A: Sees message in synthetic injection
 
     A->>B: broadcast(reply_to=1, message="Answer!")
 ```
 
-This happens transparently - agents don't need to do anything special to receive messages while idle.
-
 ## Receiving Messages
 
-Messages are injected as a synthetic `broadcast` tool result. Here's the complete structure:
+Messages appear as synthetic `broadcast` tool results injected into context:
 
 ```json
 {
   "tool": "broadcast",
   "state": {
-    "status": "completed",
     "input": { "synthetic": true },
     "output": {
       "hint": "ACTION REQUIRED: Announce yourself...",
-      "agents": [
-        { "name": "agentA", "status": "Working on frontend components" }
-      ],
-      "messages": [
-        {
-          "id": 1,
-          "from": "agentA",
-          "content": "What's the status on the API?"
-        },
-        {
-          "id": 2,
-          "from": "agentA",
-          "content": "Also, can you check the tests?"
-        }
-      ]
-    },
-    "title": "1 agent(s), 2 message(s)"
+      "agents": [{ "name": "agentA", "status": "Working on frontend" }],
+      "messages": [{ "id": 1, "from": "agentA", "content": "Need help?" }]
+    }
   }
 }
 ```
 
-- **`input.synthetic`**: Indicates this was injected by IAM, not a real agent call
-- **`output.hint`**: Shown only if agent hasn't announced yet (disappears after first broadcast)
-- **`output.agents`**: Other agents and their status (not replyable)
-- **`output.messages`**: Messages you can reply to using `reply_to`
+- **`synthetic: true`**: Indicates IAM injection, not a real agent call
+- **`hint`**: Shown until agent announces via first broadcast
+- **`agents`**: Other agents and their status (always visible, even when idle)
+- **`messages`**: Inbox messages, reply using `reply_to`
 
-Messages persist in the inbox until the agent marks them as handled using `reply_to`.
+## Attention Mechanism
 
-**Discovery:** Agents discover each other through synthetic injection. The first `broadcast` call sets the agent's status, which other agents see in the `agents` array.
+On every LLM call, IAM injects a synthetic broadcast result showing:
 
-## Attention Layer
+- All sibling agents (even idle ones) with their status
+- Any pending messages in the inbox
 
-On every LLM fetch, pending inbox messages are injected as a synthetic `broadcast` tool result at the end of the message chain. The synthetic call has `input: { synthetic: true }` to indicate it was injected by IAM, not a real agent call.
+This ensures agents always know about each other and never miss messages.
 
-After injection, the message chain looks like:
+## OpenCode Hook: `session.before_complete`
 
-1. system prompt
-2. user message
-3. assistant response
-4. tool calls...
-5. user message
-6. **`[broadcast]` 1 agent(s), 2 message(s)** ← injected at end
+IAM uses this hook (requires OpenCode PR) to coordinate completion:
 
-## Example Workflow
+```typescript
+"session.before_complete"?: (
+  input: { sessionID: string; parentSessionID?: string },
+  output: { waitForSessions: string[]; resumePrompt?: string },
+) => Promise<void>
+```
+
+**Output options:**
+
+- `waitForSessions`: Session IDs to wait for (current session auto-filtered)
+- `resumePrompt`: If set, starts a new prompt cycle and waits for it
+
+This enables the "main blocks until everything completes" behavior.
+
+## Example: Parallel Work with Spawn
 
 ```
-# Parent spawns two agents to work on different parts of a feature
-
-AgentA (working on frontend):
-  -> broadcast(message="Starting frontend work")
-     # Tool result shows: "Available agents: agentB"
-  -> ... does work ...
-  -> broadcast(send_to="agentB", message="Need the API schema")
-
-AgentB (working on backend):
-  -> broadcast(message="Starting backend work")
-     # Tool result shows: "Available agents: agentA"
-  -> ... sees AgentA's question in inbox ...
-  -> broadcast(reply_to=1, message="Here's the schema: {...}")
-     # Tool result shows: Marked as handled: #1 from agentA
-     # Recipient auto-wired to agentA
+Main Session:
+  -> task(prompt="Build feature X")
 
 AgentA:
-  -> ... sees AgentB's response in inbox ...
-  -> broadcast(reply_to=1, message="Got it, thanks!")
-     # Recipient auto-wired to agentB
+  -> broadcast(message="Building feature X")
+  -> spawn(prompt="Create the API", description="API work")
+     # Returns immediately, agentA continues
+  -> ... does frontend work ...
+  -> Finishes own work
+
+  # session.before_complete fires:
+  # - Waits for spawned agentB
+  # - agentB completes, output piped to agentA
+  # - agentA resumed to process output
+
+  -> Sees agentB's output in inbox
+  -> broadcast(message="Got the API, integrating...")
+  -> Completes with full result
+
+Main Session:
+  -> Receives complete result (frontend + API integrated)
 ```
+
+## Architecture Summary
+
+| Component                 | Purpose                                  |
+| ------------------------- | ---------------------------------------- |
+| `broadcast`               | Send/receive messages between agents     |
+| `spawn`                   | Create sibling agents (fire-and-forget)  |
+| Synthetic injection       | Show agents + messages on every LLM call |
+| `session.before_complete` | Wait for spawns, trigger resumes         |
+| Output piping             | Spawned agent output → caller inbox      |
+| Session resumption        | Wake idle agents on new messages         |

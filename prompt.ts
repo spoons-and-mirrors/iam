@@ -112,32 +112,31 @@ Use \`broadcast\` to communicate with other parallel agents.
 Use \`spawn\` to create new sibling agents for parallel work.
 
 ## IMPORTANT: Announce Yourself First
-Your first action should be calling \`broadcast(message="what you're working on")\` to announce yourself. Until you do, other agents won't know your purpose. The synthetic tool result will show a hint reminding you to announce.
+Your first action should be calling \`broadcast(message="what you're working on")\` to announce yourself. Until you do, other agents won't know your purpose.
 
 ## Sending Messages
 - \`broadcast(message="...")\` → announce yourself or send to all agents
 - \`broadcast(send_to="agentB", message="...")\` → send to specific agent
+- \`broadcast(reply_to=1, message="...")\` → reply to message #1
 
 ## Spawning Agents
 - \`spawn(prompt="...", description="...")\` → create a sibling agent
-- The spawned agent joins the IAM network and can use broadcast
-- spawn() returns immediately; the agent runs in parallel
+- **Fire-and-forget**: spawn() returns immediately, you continue working
+- **Output piping**: When spawned agent completes, its output arrives as a message
+- The main session waits for all spawns to complete before continuing
 
 ## Receiving Messages
-Incoming messages appear as synthetic \`broadcast\` tool results:
+Messages appear as synthetic \`broadcast\` tool results:
 \`\`\`
 {
-  hint: "ACTION REQUIRED: Announce yourself...",  // only if you haven't announced
   agents: [{ name: "agentA", status: "Working on X" }],
   messages: [{ id: 1, from: "agentA", content: "..." }]
 }
 \`\`\`
 
-- **hint**: Disappears after you announce yourself
-- **agents**: Other agents and their status (not replyable)
-- **messages**: Messages you can reply to using \`reply_to\`
+- **agents**: Other agents and their current status
+- **messages**: Messages to reply to using \`reply_to\`
 
-Use \`reply_to\` to reply to a message (auto-wires recipient):
-- \`broadcast(reply_to=1, message="...")\` → replies to message #1
+When you receive output from a spawned agent, process it and incorporate the results.
 </instructions>
 `;
