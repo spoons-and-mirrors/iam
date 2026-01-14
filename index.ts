@@ -438,8 +438,9 @@ async function resumeSessionWithBroadcast(
   });
 
   try {
-    // Format the message as a broadcast notification
-    const resumePrompt = `[Broadcast from ${senderAlias}]: ${messageContent}`;
+    // Format the resume prompt - DON'T include full message content
+    // because the synthetic injection will show it. Just notify that new messages arrived.
+    const resumePrompt = `[Broadcast from ${senderAlias}]: New message received. Check your inbox.`;
 
     // Mark session as active before resuming
     const state = sessionStates.get(recipientSessionId);
@@ -1327,8 +1328,8 @@ const plugin: Plugin = async (ctx) => {
   storedClient = client;
 
   return {
-    // Track session idle events for broadcast resumption
-    "session.idle": ({ sessionID }: { sessionID: string }) => {
+    // Track session idle events for broadcast resumption AND spawn completion
+    "session.idle": async ({ sessionID }: { sessionID: string }) => {
       log.debug(LOG.SESSION, `session.idle hook fired`, { sessionID });
       const alias = sessionToAlias.get(sessionID);
       if (alias) {
@@ -1339,6 +1340,19 @@ const plugin: Plugin = async (ctx) => {
           lastActivity: Date.now(),
         });
         log.info(LOG.SESSION, `Session marked idle`, { sessionID, alias });
+
+        // Check if this is a spawned session that completed
+        // If so, mark it as completed in the parent TUI
+        const spawn = activeSpawns.get(sessionID);
+        if (spawn) {
+          log.info(LOG.SESSION, `Spawned session completed, marking done`, {
+            sessionID,
+            alias: spawn.alias,
+          });
+          // Fetch output and mark complete
+          const output = await fetchSpawnOutput(client, sessionID, spawn.alias);
+          await markSpawnCompleted(client, spawn, output);
+        }
       } else {
         log.debug(LOG.SESSION, `session.idle for untracked session`, {
           sessionID,
@@ -1819,59 +1833,96 @@ const plugin: Plugin = async (ctx) => {
               });
             }
 
-            // Step 3: Prompt the session and WAIT for completion (blocking)
-            // This ensures the caller waits for the spawned agent to finish,
-            // which in turn makes the main session wait for all spawns.
-            log.info(LOG.TOOL, `spawn starting session (blocking)`, {
+            // Step 3: Start the session WITHOUT blocking (fire-and-forget)
+            // The spawned agent runs in parallel with the caller.
+            // Completion is detected via session.idle hook, which marks the spawn complete.
+            log.info(LOG.TOOL, `spawn starting session (non-blocking)`, {
               newAlias,
               newSessionId,
             });
 
-            let spawnOutput: string;
-            try {
-              const result = await client.session.prompt({
+            // Fire and forget - don't await the prompt
+            client.session
+              .prompt({
                 path: { id: newSessionId },
                 body: {
                   parts: [{ type: "text", text: args.prompt }],
                 },
+              })
+              .then(async (result) => {
+                const resultAny = result as { data?: unknown; error?: unknown };
+                if (resultAny.error) {
+                  log.error(LOG.TOOL, `spawn prompt failed`, {
+                    newAlias,
+                    error: JSON.stringify(resultAny.error),
+                  });
+                } else {
+                  log.info(LOG.TOOL, `spawn agent completed (async)`, {
+                    newAlias,
+                    newSessionId,
+                  });
+                }
+
+                // Since session.idle hook doesn't fire for spawned sessions,
+                // we handle completion here manually:
+
+                // 1. Mark session as idle in sessionStates (enables resume)
+                sessionStates.set(newSessionId, {
+                  sessionId: newSessionId,
+                  alias: newAlias,
+                  status: "idle",
+                  lastActivity: Date.now(),
+                });
+                log.info(LOG.SESSION, `Spawned session marked idle`, {
+                  newSessionId,
+                  newAlias,
+                });
+
+                // 2. Handle spawn completion (fetch output, mark complete in TUI)
+                const spawn = activeSpawns.get(newSessionId);
+                if (spawn) {
+                  const output = await fetchSpawnOutput(
+                    client,
+                    newSessionId,
+                    newAlias,
+                  );
+                  await markSpawnCompleted(client, spawn, output);
+                }
+
+                // 3. Check for unread messages and resume if needed
+                const unreadMessages = getMessagesNeedingResume(newSessionId);
+                if (unreadMessages.length > 0) {
+                  log.info(
+                    LOG.SESSION,
+                    `Spawned session has unread messages, resuming`,
+                    {
+                      newSessionId,
+                      newAlias,
+                      unreadCount: unreadMessages.length,
+                    },
+                  );
+                  const firstUnread = unreadMessages[0];
+                  markMessagesAsPresented(newSessionId, [firstUnread.msgIndex]);
+                  resumeSessionWithBroadcast(
+                    newSessionId,
+                    firstUnread.from,
+                    firstUnread.body,
+                  ).catch((e) =>
+                    log.error(LOG.SESSION, `Failed to resume spawned session`, {
+                      error: String(e),
+                    }),
+                  );
+                }
+              })
+              .catch((err: unknown) => {
+                log.error(LOG.TOOL, `spawn prompt error`, {
+                  newAlias,
+                  error: String(err),
+                });
               });
 
-              const resultAny = result as { data?: unknown; error?: unknown };
-              if (resultAny.error) {
-                log.error(LOG.TOOL, `spawn prompt failed`, {
-                  newAlias,
-                  error: JSON.stringify(resultAny.error),
-                });
-                spawnOutput = `Agent ${newAlias} failed: ${JSON.stringify(resultAny.error)}`;
-              } else {
-                log.info(LOG.TOOL, `spawn agent completed`, {
-                  newAlias,
-                  newSessionId,
-                });
-                // Fetch the actual output from the spawned session
-                spawnOutput = await fetchSpawnOutput(
-                  client,
-                  newSessionId,
-                  newAlias,
-                );
-              }
-            } catch (err: unknown) {
-              log.error(LOG.TOOL, `spawn prompt error`, {
-                newAlias,
-                error: String(err),
-              });
-              spawnOutput = `Agent ${newAlias} error: ${String(err)}`;
-            }
-
-            // Step 4: Mark the spawn as completed in the parent TUI
-            const spawn = activeSpawns.get(newSessionId);
-            if (spawn) {
-              await markSpawnCompleted(client, spawn, spawnOutput);
-            }
-
-            // Return the spawned agent's output to the caller
-            // This allows the caller to see what the spawned agent did
-            return spawnOutput;
+            // Return immediately - caller can continue working
+            return spawnResult(newAlias, newSessionId, description);
           } catch (e) {
             log.error(LOG.TOOL, `spawn failed`, {
               callerAlias,
