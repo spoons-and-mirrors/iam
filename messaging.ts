@@ -790,7 +790,6 @@ export async function fetchSpawnOutput(
 export async function markSpawnCompleted(
   client: OpenCodeSessionClient,
   spawn: SpawnInfo,
-  output?: string,
 ): Promise<boolean> {
   if (!spawn.partId || !spawn.parentMessageId || !spawn.parentSessionId) {
     log.warn(LOG.TOOL, `Cannot mark spawn completed - missing part info`, {
@@ -802,11 +801,9 @@ export async function markSpawnCompleted(
     return false;
   }
 
-  // Fetch actual output from the spawned session if not provided
-  let finalOutput = output;
-  if (!finalOutput) {
-    finalOutput = await fetchSpawnOutput(client, spawn.sessionId, spawn.alias);
-  }
+  // NOTE: We don't include the actual output in the task part.
+  // The full output is piped to the caller (subagent) only.
+  // Main session sees just a summary to keep its context clean.
 
   const now = Date.now();
 
@@ -859,6 +856,11 @@ export async function markSpawnCompleted(
     spawn.parentSessionId = parentId;
   }
 
+  // IMPORTANT: Don't expose full output to main session's LLM context.
+  // The output is piped to the caller (subagent) only.
+  // Main session just sees a completion summary in its TUI.
+  const summaryOutput = `Agent ${spawn.alias} completed successfully.\nOutput was piped to the caller.\n\n<task_metadata>\nsession_id: ${spawn.sessionId}\n</task_metadata>`;
+
   const completedPart = {
     id: spawn.partId,
     sessionID: spawn.parentSessionId,
@@ -873,7 +875,7 @@ export async function markSpawnCompleted(
         prompt: spawn.prompt,
         subagent_type: "general",
       },
-      output: finalOutput,
+      output: summaryOutput, // Summary only - full output goes to caller
       title: spawn.description,
       metadata: {
         sessionId: spawn.sessionId,

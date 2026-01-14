@@ -249,7 +249,7 @@ const plugin: Plugin = async (ctx) => {
           });
           // Fetch output and mark complete
           const output = await fetchSpawnOutput(client, sessionID, spawn.alias);
-          await markSpawnCompleted(client, spawn, output);
+          await markSpawnCompleted(client, spawn);
         }
       } else {
         log.debug(LOG.SESSION, `session.idle for untracked session`, {
@@ -799,7 +799,7 @@ const plugin: Plugin = async (ctx) => {
                 // 3. Mark the spawn as completed in the parent TUI
                 const spawn = activeSpawns.get(newSessionId);
                 if (spawn) {
-                  await markSpawnCompleted(client, spawn, spawnOutput);
+                  await markSpawnCompleted(client, spawn);
                 }
 
                 // 4. Pipe the spawn output to the caller
