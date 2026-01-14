@@ -17,10 +17,6 @@ sequenceDiagram
 
     Note over A,B: Attention mechanism activation
 
-    A->>B: broadcast(message="Doing X")
-    Note over B: Get announcement in synthetic tool result
-
-
     A->>B: broadcast(send_to="agentB", message="Question?")
     A->>B: broadcast(send_to="agentB", message="Other question?")
 
