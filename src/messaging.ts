@@ -25,11 +25,11 @@ export {
   getParentId,
   isChildSession,
   createInboxMessage,
-  createSpawnTaskMessage,
+  createSubagentTaskMessage,
   createWorktreeSummaryMessage,
   injectTaskPartToParent,
-  fetchSpawnOutput,
-  markSpawnCompleted,
+  fetchSubagentOutput,
+  markSubagentCompleted,
 } from "./injection";
 
 // ============================================================================
@@ -187,14 +187,14 @@ export async function resumeSessionWithBroadcast(
 }
 
 /**
- * Resume session with spawn output as a persisted user message.
- * Used when spawn_result_forced_attention is enabled.
- * The spawn output is included directly in the user message, persisting to DB.
+ * Resume session with subagent output as a persisted user message.
+ * Used when subagent_result_forced_attention is enabled.
+ * The subagent output is included directly in the user message, persisting to DB.
  */
-export async function resumeWithSpawnOutput(
+export async function resumeWithSubagentOutput(
   recipientSessionId: string,
   senderAlias: string,
-  spawnOutput: string,
+  subagentOutput: string,
 ): Promise<boolean> {
   const storedClient = getStoredClient();
   if (!storedClient) {
@@ -206,22 +206,22 @@ export async function resumeWithSpawnOutput(
 
   log.info(
     LOG.MESSAGE,
-    `Resuming session with spawn output (forced attention)`,
+    `Resuming session with subagent output (forced attention)`,
     {
       recipientSessionId,
       recipientAlias,
       senderAlias,
-      outputLength: spawnOutput.length,
+      outputLength: subagentOutput.length,
     },
   );
 
   try {
-    // Format the resume prompt with the full spawn output embedded
+    // Format the resume prompt with the full subagent output embedded
     // This persists to DB as a user message
     const resumePrompt = `[Received subagent results: resuming session...]
 
 <agent_output from="${senderAlias}">
-${spawnOutput}
+${subagentOutput}
 </agent_output>`;
 
     // Mark session as active before resuming
@@ -231,7 +231,7 @@ ${spawnOutput}
       state.lastActivity = Date.now();
     }
 
-    log.info(LOG.MESSAGE, `Sending spawn output as user message`, {
+    log.info(LOG.MESSAGE, `Sending subagent output as user message`, {
       recipientSessionId,
       recipientAlias,
       promptLength: resumePrompt.length,
@@ -256,7 +256,7 @@ ${spawnOutput}
 
         log.info(
           LOG.MESSAGE,
-          `Session resumed with spawn output, marked idle`,
+          `Session resumed with subagent output, marked idle`,
           {
             recipientSessionId,
             recipientAlias,
@@ -286,7 +286,7 @@ ${spawnOutput}
           );
         }
       } catch (e) {
-        log.error(LOG.MESSAGE, `Resumed session with spawn output failed`, {
+        log.error(LOG.MESSAGE, `Resumed session with subagent output failed`, {
           recipientSessionId,
           error: String(e),
         });
@@ -299,7 +299,7 @@ ${spawnOutput}
 
     return true;
   } catch (e) {
-    log.error(LOG.MESSAGE, `Failed to resume session with spawn output`, {
+    log.error(LOG.MESSAGE, `Failed to resume session with subagent output`, {
       recipientSessionId,
       error: String(e),
     });

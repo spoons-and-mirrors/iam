@@ -13,16 +13,16 @@ import * as os from "os";
 export interface PocketUniverseConfig {
   /** Enable isolated git worktrees for each agent (default: false) */
   worktree: boolean;
-  /** Enable the spawn tool for creating sibling agents (default: true) */
-  spawn: boolean;
+  /** Enable the subagent tool for creating sibling agents (default: true) */
+  subagent: boolean;
   /** Enable debug logging to .logs/pocket-universe.log (default: false) */
   logging: boolean;
   /**
-   * When true (default), spawn results appear in the broadcast inbox
-   * via synthetic injection. When false, spawn results are injected
+   * When true (default), subagent results appear in the broadcast inbox
+   * via synthetic injection. When false, subagent results are injected
    * as a persisted user message, forcing immediate LLM attention.
    */
-  spawn_result_forced_attention: boolean;
+  subagent_result_forced_attention: boolean;
 }
 
 // ============================================================================
@@ -31,9 +31,9 @@ export interface PocketUniverseConfig {
 
 const DEFAULT_CONFIG: PocketUniverseConfig = {
   worktree: false,
-  spawn: true,
+  subagent: true,
   logging: false,
-  spawn_result_forced_attention: true,
+  subagent_result_forced_attention: true,
 };
 
 // ============================================================================
@@ -164,10 +164,10 @@ export function isWorktreeEnabled(): boolean {
 }
 
 /**
- * Check if spawn tool is enabled
+ * Check if subagent tool is enabled
  */
-export function isSpawnEnabled(): boolean {
-  return loadConfig().spawn;
+export function isSubagentEnabled(): boolean {
+  return loadConfig().subagent;
 }
 
 /**
@@ -178,10 +178,10 @@ export function isLoggingEnabled(): boolean {
 }
 
 /**
- * Check if spawn result forced attention mode is enabled
+ * Check if subagent result forced attention mode is enabled
  */
-export function isSpawnResultForcedAttention(): boolean {
-  return loadConfig().spawn_result_forced_attention;
+export function isSubagentResultForcedAttention(): boolean {
+  return loadConfig().subagent_result_forced_attention;
 }
 
 /**
@@ -205,16 +205,16 @@ export function getConfigTemplate(): string {
   // Each agent gets its own clean checkout from HEAD
   "worktree": false,
 
-  // Enable the spawn tool for creating sibling agents
+  // Enable the subagent tool for creating sibling agents
   // Allows agents to spawn other agents that run in parallel
-  "spawn": true,
+  "subagent": true,
 
   // Enable debug logging to .logs/pocket-universe.log
   "logging": false,
 
-  // When true (default), spawn results appear in broadcast inbox.
-  // When false, spawn results are injected as persisted user message.
-  "spawn_result_forced_attention": true
+  // When true (default), subagent results appear in broadcast inbox.
+  // When false, subagent results are injected as persisted user message.
+  "subagent_result_forced_attention": true
 }
 `;
 }

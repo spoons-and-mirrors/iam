@@ -149,15 +149,15 @@ export interface SessionState {
   lastActivity: number;
 }
 
-// Track spawned sessions that need to be injected into parent's message history
-export interface SpawnInfo {
+// Track subagent sessions that need to be injected into parent's message history
+export interface SubagentInfo {
   sessionId: string;
   alias: string;
   description: string;
   prompt: string;
   timestamp: number;
   injected: boolean;
-  // For updating the task part when spawn completes
+  // For updating the task part when subagent completes
   partId?: string;
   parentMessageId?: string;
   parentSessionId?: string;

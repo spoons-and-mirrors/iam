@@ -7,7 +7,7 @@ import type {
   Message,
   CachedParentId,
   SessionState,
-  SpawnInfo,
+  SubagentInfo,
   OpenCodeSessionClient,
 } from "./types";
 import { log, LOG } from "./logger";
@@ -73,16 +73,16 @@ export const pendingTaskDescriptions = new Map<string, string[]>();
 // Key: sessionId, Value: Set of msgIndex that were presented
 export const presentedMessages = new Map<string, Set<number>>();
 
-// Maps parentSessionId -> array of spawn info
-export const pendingSpawns = new Map<string, SpawnInfo[]>();
+// Maps parentSessionId -> array of subagent info
+export const pendingSubagents = new Map<string, SubagentInfo[]>();
 
-// Track active spawns by sessionId for completion updates
-export const activeSpawns = new Map<string, SpawnInfo>();
+// Track active subagents by sessionId for completion updates
+export const activeSubagents = new Map<string, SubagentInfo>();
 
-// Track pending spawns per CALLER session (not parent)
-// When agentA spawns agentB, we track that agentA has a pending spawn
+// Track pending subagents per CALLER session (not parent)
+// When agentA spawns agentB, we track that agentA has a pending subagent
 // Key: caller session ID, Value: Set of spawned session IDs
-export const callerPendingSpawns = new Map<string, Set<string>>();
+export const callerPendingSubagents = new Map<string, Set<string>>();
 
 // Track active first-level children per MAIN session
 // This prevents premature summary injection when main session spawns multiple task tools in parallel
@@ -332,9 +332,9 @@ export function cleanupCompletedAgents(): void {
     sessionStates: sessionStates.size,
     childCache: childSessionCache.size,
     presentedMsgs: presentedMessages.size,
-    pendingSpawns: pendingSpawns.size,
-    activeSpawns: activeSpawns.size,
-    callerPendingSpawns: callerPendingSpawns.size,
+    pendingSubagents: pendingSubagents.size,
+    activeSubagents: activeSubagents.size,
+    callerPendingSubagents: callerPendingSubagents.size,
     mainSessionActiveChildren: mainSessionActiveChildren.size,
   };
 
@@ -350,9 +350,9 @@ export function cleanupCompletedAgents(): void {
   sessionStates.clear();
   childSessionCache.clear();
   presentedMessages.clear();
-  pendingSpawns.clear();
-  activeSpawns.clear();
-  callerPendingSpawns.clear();
+  pendingSubagents.clear();
+  activeSubagents.clear();
+  callerPendingSubagents.clear();
   mainSessionActiveChildren.clear();
   pendingTaskDescriptions.clear();
 

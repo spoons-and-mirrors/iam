@@ -18,9 +18,9 @@ import {
   announcedSessions,
   summaryInjectedSessions,
   pendingTaskDescriptions,
-  pendingSpawns,
-  activeSpawns,
-  callerPendingSpawns,
+  pendingSubagents,
+  activeSubagents,
+  callerPendingSubagents,
   mainSessionActiveChildren,
   setStoredClient,
   getAlias,
@@ -38,18 +38,18 @@ import {
   getParentId,
   isChildSession,
   createInboxMessage,
-  createSpawnTaskMessage,
+  createSubagentTaskMessage,
   createWorktreeSummaryMessage,
-  fetchSpawnOutput,
-  markSpawnCompleted,
+  fetchSubagentOutput,
+  markSubagentCompleted,
 } from "./messaging";
 import {
   injectPocketUniverseSummaryToMain,
   createSummaryCoverMessage,
 } from "./injection";
-import { createBroadcastTool, createSpawnTool } from "./tools";
+import { createBroadcastTool, createSubagentTool } from "./tools";
 import { createAgentWorktree } from "./worktree";
-import { isSpawnEnabled, isWorktreeEnabled } from "./config";
+import { isSubagentEnabled, isWorktreeEnabled } from "./config";
 
 // ============================================================================
 // Plugin
@@ -63,7 +63,7 @@ const plugin: Plugin = async (ctx) => {
   setStoredClient(client);
 
   return {
-    // Allow main session to wait for spawned grandchild sessions AND resumed sessions
+    // Allow main session to wait for subagent grandchild sessions AND resumed sessions
     "session.before_complete": async (
       input: { sessionID: string; parentSessionID?: string },
       output: { waitForSessions: string[]; resumePrompt?: string },
@@ -103,54 +103,54 @@ const plugin: Plugin = async (ctx) => {
         });
       };
 
-      // Loop until all spawns complete AND no pending resumes
+      // Loop until all subagents complete AND no pending resumes
       let iteration = 0;
       while (iteration < 100) {
         // Safety limit
         iteration++;
 
-        // 1. Check for pending spawns
-        const pending = callerPendingSpawns.get(input.sessionID);
+        // 1. Check for pending subagents
+        const pending = callerPendingSubagents.get(input.sessionID);
         if (pending && pending.size > 0) {
-          const spawnIds = Array.from(pending);
+          const subagentIds = Array.from(pending);
           log.info(
             LOG.SESSION,
-            `session.before_complete: waiting for spawns (iteration ${iteration})`,
+            `session.before_complete: waiting for subagents (iteration ${iteration})`,
             {
               sessionID: input.sessionID,
               alias,
-              pendingSpawnCount: spawnIds.length,
-              pendingSpawnIds: spawnIds,
+              pendingSubagentCount: subagentIds.length,
+              pendingSubagentIds: subagentIds,
             },
           );
 
-          // Wait for all pending spawns to become idle
-          await Promise.all(spawnIds.map(waitForSessionIdle));
+          // Wait for all pending subagents to become idle
+          await Promise.all(subagentIds.map(waitForSessionIdle));
 
-          // Check which spawns are truly done (idle AND no unread messages)
-          // If a spawn has unread messages, it will be resumed (via auto-resume logic in its own thread)
+          // Check which subagents are truly done (idle AND no unread messages)
+          // If a subagent has unread messages, it will be resumed (via auto-resume logic in its own thread)
           // so we must keep waiting for it.
-          const doneSpawns = spawnIds.filter((id) => {
+          const doneSubagents = subagentIds.filter((id) => {
             const unread = getMessagesNeedingResume(id);
             return unread.length === 0;
           });
 
-          // Remove truly done spawns
-          for (const doneId of doneSpawns) {
+          // Remove truly done subagents
+          for (const doneId of doneSubagents) {
             pending.delete(doneId);
           }
 
-          // If pendingSpawns is empty, clean up the map entry
+          // If pendingSubagents is empty, clean up the map entry
           if (pending.size === 0) {
-            callerPendingSpawns.delete(input.sessionID);
+            callerPendingSubagents.delete(input.sessionID);
           }
 
-          log.info(LOG.SESSION, `session.before_complete: spawns checked`, {
+          log.info(LOG.SESSION, `session.before_complete: subagents checked`, {
             sessionID: input.sessionID,
             alias,
-            totalSpawns: spawnIds.length,
-            doneSpawns: doneSpawns.length,
-            remainingSpawns: pending.size,
+            totalSubagents: subagentIds.length,
+            doneSubagents: doneSubagents.length,
+            remainingSubagents: pending.size,
           });
 
           // Continue loop to check for messages that may have arrived
@@ -275,18 +275,18 @@ const plugin: Plugin = async (ctx) => {
       }
     },
 
-    // Track session idle events for broadcast resumption AND spawn completion
+    // Track session idle events for broadcast resumption AND subagent completion
     "session.idle": async ({ sessionID }: { sessionID: string }) => {
       // Check if this is a registered Pocket Universe session (child session)
       const alias = sessionToAlias.get(sessionID);
-      const hasPendingSpawns = callerPendingSpawns.has(sessionID);
-      const pendingCount = callerPendingSpawns.get(sessionID)?.size || 0;
+      const hasPendingSubagents = callerPendingSubagents.has(sessionID);
+      const pendingCount = callerPendingSubagents.get(sessionID)?.size || 0;
 
       log.info(LOG.SESSION, `session.idle hook fired`, {
         sessionID,
         alias: alias || "unknown",
-        hasPendingSpawns,
-        pendingSpawnCount: pendingCount,
+        hasPendingSubagents,
+        pendingSubagentCount: pendingCount,
       });
 
       if (alias) {
@@ -298,17 +298,17 @@ const plugin: Plugin = async (ctx) => {
         });
         log.info(LOG.SESSION, `Session marked idle`, { sessionID, alias });
 
-        // Check if this is a spawned session that completed
+        // Check if this is a subagent session that completed
         // If so, mark it as completed in the parent TUI
-        const spawn = activeSpawns.get(sessionID);
-        if (spawn) {
-          log.info(LOG.SESSION, `Spawned session completed, marking done`, {
+        const subagent = activeSubagents.get(sessionID);
+        if (subagent) {
+          log.info(LOG.SESSION, `Subagent session completed, marking done`, {
             sessionID,
-            alias: spawn.alias,
+            alias: subagent.alias,
           });
           // Fetch output and mark complete
-          await fetchSpawnOutput(client, sessionID, spawn.alias);
-          await markSpawnCompleted(client, spawn);
+          await fetchSubagentOutput(client, sessionID, subagent.alias);
+          await markSubagentCompleted(client, subagent);
         }
       } else {
         log.debug(LOG.SESSION, `session.idle for untracked session`, {
@@ -332,17 +332,17 @@ const plugin: Plugin = async (ctx) => {
       if (subtaskSessionId) {
         const alias = sessionToAlias.get(subtaskSessionId);
         if (alias) {
-          // Check if this session has pending spawns
-          const pending = callerPendingSpawns.get(subtaskSessionId);
+          // Check if this session has pending subagents
+          const pending = callerPendingSubagents.get(subtaskSessionId);
           if (pending && pending.size > 0) {
             log.warn(
               LOG.SESSION,
-              `Task completing but has pending spawns! Main will continue early.`,
+              `Task completing but has pending subagents! Main will continue early.`,
               {
                 subtaskSessionId,
                 alias,
-                pendingSpawnCount: pending.size,
-                pendingSpawnIds: Array.from(pending),
+                pendingSubagentCount: pending.size,
+                pendingSubagentIds: Array.from(pending),
               },
             );
           }
@@ -399,8 +399,8 @@ const plugin: Plugin = async (ctx) => {
 
     tool: {
       broadcast: createBroadcastTool(client),
-      // Only register spawn tool if enabled in config
-      ...(isSpawnEnabled() ? { spawn: createSpawnTool(client) } : {}),
+      // Only register subagent tool if enabled in config
+      ...(isSubagentEnabled() ? { subagent: createSubagentTool(client) } : {}),
     },
 
     // Capture task description before execution
@@ -573,30 +573,34 @@ Do NOT modify files outside this worktree.
 
       const sessionId = lastUserMsg.info.sessionID;
 
-      // Check for pending spawns that need to be injected into this session
-      const spawns = pendingSpawns.get(sessionId) || [];
-      const uninjectedSpawns = spawns.filter((s) => !s.injected);
+      // Check for pending subagents that need to be injected into this session
+      const subagents = pendingSubagents.get(sessionId) || [];
+      const uninjectedSubagents = subagents.filter((s) => !s.injected);
 
-      if (uninjectedSpawns.length > 0) {
+      if (uninjectedSubagents.length > 0) {
         log.info(
           LOG.INJECT,
-          `Injecting ${uninjectedSpawns.length} synthetic task(s) for spawns`,
+          `Injecting ${uninjectedSubagents.length} synthetic task(s) for subagents`,
           {
             sessionId,
-            spawns: uninjectedSpawns.map((s) => s.alias),
+            subagents: uninjectedSubagents.map((s) => s.alias),
           },
         );
 
-        // Inject synthetic task tool results for each spawn
-        for (const spawn of uninjectedSpawns) {
-          const taskMsg = createSpawnTaskMessage(sessionId, spawn, lastUserMsg);
-          output.messages.push(taskMsg as unknown as UserMessage);
-          spawn.injected = true;
-
-          log.info(LOG.INJECT, `Injected synthetic task for spawn`, {
+        // Inject synthetic task tool results for each subagent
+        for (const subagent of uninjectedSubagents) {
+          const taskMsg = createSubagentTaskMessage(
             sessionId,
-            spawnAlias: spawn.alias,
-            spawnSessionId: spawn.sessionId,
+            subagent,
+            lastUserMsg,
+          );
+          output.messages.push(taskMsg as unknown as UserMessage);
+          subagent.injected = true;
+
+          log.info(LOG.INJECT, `Injected synthetic task for subagent`, {
+            sessionId,
+            subagentAlias: subagent.alias,
+            subagentSessionId: subagent.sessionId,
           });
         }
       }
@@ -633,7 +637,7 @@ Do NOT modify files outside this worktree.
           `Skipping Pocket Universe inbox for main session`,
           {
             sessionId,
-            injectedSpawns: uninjectedSpawns.length,
+            injectedSubagents: uninjectedSubagents.length,
           },
         );
         return;
@@ -696,7 +700,7 @@ Do NOT modify files outside this worktree.
       output.messages.push(inboxMsg as unknown as UserMessage);
     },
 
-    // Add broadcast and spawn to subagent_tools
+    // Add broadcast and subagent to subagent_tools
     "experimental.config.transform": async (
       _input: unknown,
       output: ConfigTransformOutput,
@@ -705,11 +709,11 @@ Do NOT modify files outside this worktree.
       const existingSubagentTools = experimental.subagent_tools ?? [];
       output.experimental = {
         ...experimental,
-        subagent_tools: [...existingSubagentTools, "broadcast", "spawn"],
+        subagent_tools: [...existingSubagentTools, "broadcast", "subagent"],
       };
       log.info(
         LOG.HOOK,
-        `Added 'broadcast' and 'spawn' to experimental.subagent_tools`,
+        `Added 'broadcast' and 'subagent' to experimental.subagent_tools`,
       );
     },
   };

@@ -6,7 +6,7 @@ Async agents are powerful but can lead to work getting orphaned and a bunch of y
 
 **Pocket Universe fixes this.**
 
-- **Fire-and-forget with callback** — Spawned agents run in parallel, but their output is always piped back to the caller
+- **Fire-and-forget with callback** — Subagents run in parallel, but their output is always piped back to the caller
 - **No wasted tokens** — Every model output is captured and delivered, guaranteed
 - **Automatic resumption** — Idle agents wake up when messages arrive
 - **Complete orchestration** — Main session waits for ALL work to finish before continuing
@@ -14,7 +14,7 @@ Async agents are powerful but can lead to work getting orphaned and a bunch of y
 
 Within a single main session call, an entire universe of parallel work can unfold — agents spawning agents, communicating, coordinating — and the main session observes it all complete before moving on. No orphaned work. No lost context. No wasted compute. No guarantee this actually helps anything, but it's worth trying.
 
-If you want background agents, open a new opencode session. If you want want async subagent with proper callback management within a main thread block, use this.
+If you want background agents, open a new opencode session. If you want async subagents with proper callback management within a main thread block, use this.
 
 ---
 
@@ -24,12 +24,12 @@ If you want background agents, open a new opencode session. If you want want asy
 sequenceDiagram
     participant Main as Main Session
     participant A as AgentA
-    participant B as AgentB (spawned)
+    participant B as AgentB (subagent)
 
     Main->>A: task tool
     Note over A: AgentA starts work
 
-    A->>B: spawn(prompt="...")
+    A->>B: subagent(prompt="...")
     Note over A: Returns immediately (fire-and-forget)
     Note over B: AgentB works in parallel
 
@@ -77,10 +77,10 @@ broadcast(reply_to=1, message="...")         # Reply to message #1
 
 **Status history:** Each agent's status updates are tracked as a history. When you see an agent, you see all their status updates in order, showing what they've been doing.
 
-### `spawn` — Create sibling agents
+### `subagent` — Create sibling agents
 
 ```
-spawn(prompt="Build the login form", description="Login UI")
+subagent(prompt="Build the login form", description="Login UI")
 ```
 
 | Parameter     | Required | Description                   |
@@ -90,10 +90,10 @@ spawn(prompt="Build the login form", description="Login UI")
 
 **Key behavior:**
 
-- **Async firing**: `spawn()` returns immediately, caller continues working
-- **Output piping**: When spawned agent completes, its output arrives as a message in the caller session (and wakes it if idle)
+- **Async firing**: `subagent()` returns immediately, caller continues working
+- **Output piping**: When subagent completes, its output arrives as a message in the caller session (and wakes it if idle)
 - **Main thread block**: The main session waits for ALL subagents to complete before continuing
-- **Model inheritance**: Spawned agents automatically inherit the caller's agent and model (no fallback to defaults)
+- **Model inheritance**: Subagents automatically inherit the caller's agent and model (no fallback to defaults)
 
 </details>
 
@@ -102,9 +102,9 @@ spawn(prompt="Build the login form", description="Login UI")
 
 ```mermaid
 flowchart TD
-    A[Agent finishes work] --> B{Has pending spawns?}
-    B -->|Yes| C[Wait for spawns to complete]
-    C --> D[Spawns pipe output as messages]
+    A[Agent finishes work] --> B{Has pending subagents?}
+    B -->|Yes| C[Wait for subagents to complete]
+    C --> D[Subagents pipe output as messages]
     D --> E{Has unread messages?}
     B -->|No| E
     E -->|Yes| F[Resume session]
@@ -117,8 +117,8 @@ flowchart TD
 The `session.before_complete` hook ensures no work is left behind:
 
 1. Agent finishes its work
-2. Hook checks for pending spawns → waits for them
-3. Spawned agents pipe output to caller as messages
+2. Hook checks for pending subagents → waits for them
+3. Subagents pipe output to caller as messages
 4. Hook checks for unread messages → resumes session
 5. Agent processes messages, hook fires again
 6. Only when nothing pending does the session complete
@@ -237,7 +237,7 @@ repo/
 └── (main repo)     ← main session's working directory
 ```
 
-When an agent is created (via `task` or `spawn`):
+When an agent is created (via `task` or `subagent`):
 
 1. A new worktree is created at `.worktrees/<alias>` (detached from HEAD)
 2. The agent sees its worktree path in its system prompt
@@ -292,19 +292,19 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
 ```jsonc
 {
   "worktree": false,
-  "spawn": true,
+  "subagent": true,
   "logging": false,
 }
 ```
 
 ### Feature Flags
 
-| Flag                            | Default | Description                                                                                        |
-| ------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
-| `worktree`                      | `false` | Create isolated git worktrees for each agent                                                       |
-| `spawn`                         | `true`  | Enable the `spawn` tool for creating sibling agents                                                |
-| `logging`                       | `false` | Write debug logs to `~/.config/opencode/plugin/iam/pocket-universe.log`                            |
-| `spawn_result_forced_attention` | `true`  | When true, spawn output appears in broadcast inbox; when false, injected as persisted user message |
+| Flag                               | Default | Description                                                                                           |
+| ---------------------------------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| `worktree`                         | `false` | Create isolated git worktrees for each agent                                                          |
+| `subagent`                         | `true`  | Enable the `subagent` tool for creating sibling agents                                                |
+| `logging`                          | `false` | Write debug logs to `~/.config/opencode/plugin/iam/pocket-universe.log`                               |
+| `subagent_result_forced_attention` | `true`  | When true, subagent output appears in broadcast inbox; when false, injected as persisted user message |
 
 ### Behavior When Disabled
 
@@ -314,26 +314,26 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
 - Worktree sections are hidden from system prompts and broadcasts
 - Agents work in the main repository (potential for conflicts)
 
-**`spawn: false`**
+**`subagent: false`**
 
-- The `spawn` tool is not registered
+- The `subagent` tool is not registered
 - Agents cannot create new sibling agents
-- Spawn instructions are hidden from the system prompt
+- Subagent instructions are hidden from the system prompt
 
 **`logging: false`**
 
 - No log file is created
 - Reduces disk I/O
 
-**`spawn_result_forced_attention: true`** (default)
+**`subagent_result_forced_attention: true`** (default)
 
-- Spawn output appears in the broadcast inbox (synthetic injection)
+- Subagent output appears in the broadcast inbox (synthetic injection)
 - Message is replyable via `reply_to`
 - Not persisted to database (memory only)
 
-**`spawn_result_forced_attention: false`**
+**`subagent_result_forced_attention: false`**
 
-- Spawn output is injected as a persisted user message
+- Subagent output is injected as a persisted user message
 - Forces immediate LLM attention and persists to database
 - Resume prompt shows: `[Received subagent results: resuming session...]`
 - Not replyable (it's a user message, not a broadcast)
@@ -345,9 +345,9 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
 ```jsonc
 {
   "worktree": false,
-  "spawn": true,
+  "subagent": true,
   "logging": false,
-  "spawn_result_forced_attention": true,
+  "subagent_result_forced_attention": true,
 }
 ```
 
@@ -356,20 +356,20 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
 ```jsonc
 {
   "worktree": true,
-  "spawn": true,
+  "subagent": true,
   "logging": true,
-  "spawn_result_forced_attention": true,
+  "subagent_result_forced_attention": true,
 }
 ```
 
-**Simple parallel work (no spawn, no worktrees):**
+**Simple parallel work (no subagent, no worktrees):**
 
 ```jsonc
 {
   "worktree": false,
-  "spawn": false,
+  "subagent": false,
   "logging": false,
-  "spawn_result_forced_attention": true,
+  "subagent_result_forced_attention": true,
 }
 ```
 

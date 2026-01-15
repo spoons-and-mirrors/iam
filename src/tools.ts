@@ -1,5 +1,5 @@
 // =============================================================================
-// Tool definitions: broadcast and spawn
+// Tool definitions: broadcast and subagent
 // =============================================================================
 
 import { tool } from "@opencode-ai/plugin";
@@ -9,21 +9,21 @@ import {
   BROADCAST_SELF_MESSAGE,
   broadcastUnknownRecipient,
   broadcastResult,
-  SPAWN_DESCRIPTION,
-  SPAWN_NOT_CHILD_SESSION,
-  SPAWN_MISSING_PROMPT,
-  spawnResult,
+  SUBAGENT_DESCRIPTION,
+  SUBAGENT_NOT_CHILD_SESSION,
+  SUBAGENT_MISSING_PROMPT,
+  subagentResult,
   type HandledMessage,
 } from "./prompt";
 import { log, LOG } from "./logger";
-import type { OpenCodeSessionClient, ToolContext, SpawnInfo } from "./types";
+import type { OpenCodeSessionClient, ToolContext, SubagentInfo } from "./types";
 import {
   sessionToAlias,
   aliasToSession,
   sessionStates,
   announcedSessions,
-  activeSpawns,
-  callerPendingSpawns,
+  activeSubagents,
+  callerPendingSubagents,
   getAlias,
   setDescription,
   resolveAlias,
@@ -36,7 +36,7 @@ import {
 import {
   sendMessage,
   resumeSessionWithBroadcast,
-  resumeWithSpawnOutput,
+  resumeWithSubagentOutput,
   getMessagesNeedingResume,
   markMessagesAsHandled,
   markMessagesAsPresented,
@@ -44,12 +44,12 @@ import {
   getParallelAgents,
   getParentId,
   injectTaskPartToParent,
-  fetchSpawnOutput,
-  markSpawnCompleted,
+  fetchSubagentOutput,
+  markSubagentCompleted,
 } from "./messaging";
 import type { InternalClient } from "./types";
 import { createAgentWorktree, removeAgentWorktree } from "./worktree";
-import { isWorktreeEnabled, isSpawnResultForcedAttention } from "./config";
+import { isWorktreeEnabled, isSubagentResultForcedAttention } from "./config";
 
 // ============================================================================
 // Helper: Get caller's agent and model info from their session messages
@@ -62,7 +62,7 @@ interface CallerModelInfo {
 
 /**
  * Get the caller's agent and model info from their latest assistant message.
- * This is used to inherit agent/model when spawning new sessions.
+ * This is used to inherit agent/model when creating new subagent sessions.
  */
 async function getCallerModelInfo(
   client: OpenCodeSessionClient,
@@ -381,12 +381,12 @@ export function createBroadcastTool(client: OpenCodeSessionClient) {
 }
 
 // ============================================================================
-// Spawn Tool
+// Subagent Tool
 // ============================================================================
 
-export function createSpawnTool(client: OpenCodeSessionClient) {
+export function createSubagentTool(client: OpenCodeSessionClient) {
   return tool({
-    description: SPAWN_DESCRIPTION,
+    description: SUBAGENT_DESCRIPTION,
     args: {
       prompt: tool.schema
         .string()
@@ -400,23 +400,23 @@ export function createSpawnTool(client: OpenCodeSessionClient) {
       const sessionId = context.sessionID;
 
       if (!args.prompt) {
-        log.warn(LOG.TOOL, `spawn missing 'prompt'`, { sessionId });
-        return SPAWN_MISSING_PROMPT;
+        log.warn(LOG.TOOL, `subagent missing 'prompt'`, { sessionId });
+        return SUBAGENT_MISSING_PROMPT;
       }
 
-      // Get parent session ID - spawned agent will be a sibling (child of parent)
+      // Get parent session ID - subagent will be a sibling (child of parent)
       const parentId = await getParentId(client, sessionId);
       if (!parentId) {
-        log.warn(LOG.TOOL, `spawn called from non-child session`, {
+        log.warn(LOG.TOOL, `subagent called from non-child session`, {
           sessionId,
         });
-        return SPAWN_NOT_CHILD_SESSION;
+        return SUBAGENT_NOT_CHILD_SESSION;
       }
 
       const callerAlias = getAlias(sessionId);
       const description = args.description || args.prompt.substring(0, 50);
 
-      log.info(LOG.TOOL, `spawn called`, {
+      log.info(LOG.TOOL, `subagent called`, {
         callerAlias,
         parentId,
         descriptionLength: description.length,
@@ -428,13 +428,13 @@ export function createSpawnTool(client: OpenCodeSessionClient) {
         const createResult = await client.session.create({
           body: {
             parentID: parentId,
-            title: `${description} (spawned by ${callerAlias})`,
+            title: `${description} (subagent from ${callerAlias})`,
           },
         });
 
         const newSessionId = createResult.data?.id;
         if (!newSessionId) {
-          log.error(LOG.TOOL, `spawn failed to create session`, {
+          log.error(LOG.TOOL, `subagent failed to create session`, {
             callerAlias,
           });
           return `Error: Failed to create session. No session ID returned.`;
@@ -455,7 +455,7 @@ export function createSpawnTool(client: OpenCodeSessionClient) {
           }
         }
 
-        log.info(LOG.TOOL, `spawn created session`, {
+        log.info(LOG.TOOL, `subagent created session`, {
           callerAlias,
           newAlias,
           newSessionId,
@@ -463,7 +463,7 @@ export function createSpawnTool(client: OpenCodeSessionClient) {
         });
 
         // Inject task part into parent session BEFORE starting
-        const spawnInfo: SpawnInfo = {
+        const subagentInfo: SubagentInfo = {
           sessionId: newSessionId,
           alias: newAlias,
           description,
@@ -473,46 +473,46 @@ export function createSpawnTool(client: OpenCodeSessionClient) {
           parentSessionId: parentId,
         };
 
-        // Track that the CALLER has a pending spawn
-        let callerSpawns = callerPendingSpawns.get(sessionId);
-        if (!callerSpawns) {
-          callerSpawns = new Set();
-          callerPendingSpawns.set(sessionId, callerSpawns);
+        // Track that the CALLER has a pending subagent
+        let callerSubagents = callerPendingSubagents.get(sessionId);
+        if (!callerSubagents) {
+          callerSubagents = new Set();
+          callerPendingSubagents.set(sessionId, callerSubagents);
         }
-        callerSpawns.add(newSessionId);
-        log.info(LOG.TOOL, `spawn tracked for caller`, {
+        callerSubagents.add(newSessionId);
+        log.info(LOG.TOOL, `subagent tracked for caller`, {
           callerSessionId: sessionId,
           callerAlias,
-          spawnedSessionId: newSessionId,
-          totalPendingSpawns: callerSpawns.size,
+          subagentSessionId: newSessionId,
+          totalPendingSubagents: callerSubagents.size,
         });
 
         // Try to inject immediately into parent's message history
         const injected = await injectTaskPartToParent(
           client,
           parentId,
-          spawnInfo,
+          subagentInfo,
         );
 
         if (injected) {
-          spawnInfo.injected = true;
-          activeSpawns.set(newSessionId, spawnInfo);
-          log.info(LOG.TOOL, `spawn task injected to parent TUI`, {
+          subagentInfo.injected = true;
+          activeSubagents.set(newSessionId, subagentInfo);
+          log.info(LOG.TOOL, `subagent task injected to parent TUI`, {
             parentId,
             newAlias,
-            partId: spawnInfo.partId,
+            partId: subagentInfo.partId,
           });
         } else {
           // Store for completion tracking anyway
-          activeSpawns.set(newSessionId, spawnInfo);
-          log.info(LOG.TOOL, `spawn stored for completion injection`, {
+          activeSubagents.set(newSessionId, subagentInfo);
+          log.info(LOG.TOOL, `subagent stored for completion injection`, {
             parentId,
             newAlias,
           });
         }
 
         // Start the session WITHOUT blocking (fire-and-forget)
-        log.info(LOG.TOOL, `spawn starting session (non-blocking)`, {
+        log.info(LOG.TOOL, `subagent starting session (non-blocking)`, {
           newAlias,
           newSessionId,
         });
@@ -520,7 +520,7 @@ export function createSpawnTool(client: OpenCodeSessionClient) {
         // Get caller's agent/model to inherit
         const callerModelInfo = await getCallerModelInfo(client, sessionId);
 
-        log.info(LOG.TOOL, `spawn inheriting caller's agent/model`, {
+        log.info(LOG.TOOL, `subagent inheriting caller's agent/model`, {
           callerAlias,
           agent: callerModelInfo.agent,
           modelID: callerModelInfo.model?.modelID,
@@ -540,21 +540,21 @@ export function createSpawnTool(client: OpenCodeSessionClient) {
           .then(async (result) => {
             const resultAny = result as { data?: unknown; error?: unknown };
             if (resultAny.error) {
-              log.error(LOG.TOOL, `spawn prompt failed`, {
+              log.error(LOG.TOOL, `subagent prompt failed`, {
                 newAlias,
                 error: JSON.stringify(resultAny.error),
               });
             } else {
-              log.info(LOG.TOOL, `spawn agent completed (async)`, {
+              log.info(LOG.TOOL, `subagent completed (async)`, {
                 newAlias,
                 newSessionId,
               });
             }
 
-            // Spawned session completed - handle completion:
+            // Subagent session completed - handle completion:
 
-            // 1. Fetch the output from spawned session
-            const spawnOutput = await fetchSpawnOutput(
+            // 1. Fetch the output from subagent session
+            const subagentOutput = await fetchSubagentOutput(
               client,
               newSessionId,
               newAlias,
@@ -567,74 +567,77 @@ export function createSpawnTool(client: OpenCodeSessionClient) {
               status: "idle",
               lastActivity: Date.now(),
             });
-            log.info(LOG.SESSION, `Spawned session marked idle`, {
+            log.info(LOG.SESSION, `Subagent session marked idle`, {
               newSessionId,
               newAlias,
             });
 
-            // 3. Mark the spawn as completed in the parent TUI
-            const spawn = activeSpawns.get(newSessionId);
-            if (spawn) {
-              await markSpawnCompleted(client, spawn);
+            // 3. Mark the subagent as completed in the parent TUI
+            const subagent = activeSubagents.get(newSessionId);
+            if (subagent) {
+              await markSubagentCompleted(client, subagent);
             }
 
             // 3.5. Keep worktree - agent's changes are preserved
             // User can manually merge changes from .worktrees/<alias>
-            const spawnWorktree = getWorktree(newSessionId);
-            if (spawnWorktree) {
+            const subagentWorktree = getWorktree(newSessionId);
+            if (subagentWorktree) {
               log.info(LOG.TOOL, `Worktree preserved with agent's changes`, {
                 alias: newAlias,
-                worktree: spawnWorktree,
+                worktree: subagentWorktree,
               });
             }
 
-            // 4. Pipe the spawn output to the caller
+            // 4. Pipe the subagent output to the caller
             const callerState = sessionStates.get(sessionId);
             const callerAliasForPipe =
               sessionToAlias.get(sessionId) || "caller";
 
-            log.info(LOG.TOOL, `spawn completed, still tracked for caller`, {
+            log.info(LOG.TOOL, `subagent completed, still tracked for caller`, {
               callerSessionId: sessionId,
-              spawnedSessionId: newSessionId,
+              subagentSessionId: newSessionId,
               callerAlias: callerAliasForPipe,
             });
 
-            // Create a summary message with the spawn output
-            const outputMessage = `[Received ${newAlias} completed task]\n${spawnOutput}`;
+            // Create a summary message with the subagent output
+            const outputMessage = `[Received ${newAlias} completed task]\n${subagentOutput}`;
 
             // Check if forced attention mode is enabled (flag false = forced attention)
-            const useForcedAttention = !isSpawnResultForcedAttention();
+            const useForcedAttention = !isSubagentResultForcedAttention();
 
             if (useForcedAttention) {
-              // Forced attention: inject spawn output as persisted user message
+              // Forced attention: inject subagent output as persisted user message
               log.info(
                 LOG.TOOL,
-                `Piping spawn output via forced attention (persisted user message)`,
+                `Piping subagent output via forced attention (persisted user message)`,
                 {
                   callerSessionId: sessionId,
                   callerAlias: callerAliasForPipe,
-                  spawnAlias: newAlias,
+                  subagentAlias: newAlias,
                 },
               );
-              resumeWithSpawnOutput(sessionId, newAlias, spawnOutput).catch(
-                (e) =>
-                  log.error(
-                    LOG.TOOL,
-                    `Failed to pipe spawn output (forced attention)`,
-                    {
-                      error: String(e),
-                    },
-                  ),
+              resumeWithSubagentOutput(
+                sessionId,
+                newAlias,
+                subagentOutput,
+              ).catch((e) =>
+                log.error(
+                  LOG.TOOL,
+                  `Failed to pipe subagent output (forced attention)`,
+                  {
+                    error: String(e),
+                  },
+                ),
               );
             } else if (callerState?.status === "idle") {
               // Caller is idle - resume with the output via message queue
               log.info(
                 LOG.TOOL,
-                `Piping spawn output to idle caller via resume`,
+                `Piping subagent output to idle caller via resume`,
                 {
                   callerSessionId: sessionId,
                   callerAlias: callerAliasForPipe,
-                  spawnAlias: newAlias,
+                  subagentAlias: newAlias,
                 },
               );
               resumeSessionWithBroadcast(
@@ -642,30 +645,34 @@ export function createSpawnTool(client: OpenCodeSessionClient) {
                 newAlias,
                 outputMessage,
               ).catch((e) =>
-                log.error(LOG.TOOL, `Failed to pipe spawn output to caller`, {
-                  error: String(e),
-                }),
+                log.error(
+                  LOG.TOOL,
+                  `Failed to pipe subagent output to caller`,
+                  {
+                    error: String(e),
+                  },
+                ),
               );
             } else {
               // Caller is still active - send as broadcast message
               log.info(
                 LOG.TOOL,
-                `Piping spawn output to active caller via message`,
+                `Piping subagent output to active caller via message`,
                 {
                   callerSessionId: sessionId,
                   callerAlias: callerAliasForPipe,
-                  spawnAlias: newAlias,
+                  subagentAlias: newAlias,
                 },
               );
               sendMessage(newAlias, sessionId, outputMessage);
             }
 
-            // 5. Check for unread messages and resume spawned session if needed
+            // 5. Check for unread messages and resume subagent session if needed
             const unreadMessages = getMessagesNeedingResume(newSessionId);
             if (unreadMessages.length > 0) {
               log.info(
                 LOG.SESSION,
-                `Spawned session has unread messages, resuming`,
+                `Subagent session has unread messages, resuming`,
                 {
                   newSessionId,
                   newAlias,
@@ -679,27 +686,27 @@ export function createSpawnTool(client: OpenCodeSessionClient) {
                 firstUnread.from,
                 firstUnread.body,
               ).catch((e) =>
-                log.error(LOG.SESSION, `Failed to resume spawned session`, {
+                log.error(LOG.SESSION, `Failed to resume subagent session`, {
                   error: String(e),
                 }),
               );
             }
           })
           .catch((err: unknown) => {
-            log.error(LOG.TOOL, `spawn prompt error`, {
+            log.error(LOG.TOOL, `subagent prompt error`, {
               newAlias,
               error: String(err),
             });
           });
 
         // Return immediately - caller can continue working
-        return spawnResult(newAlias, newSessionId, description);
+        return subagentResult(newAlias, newSessionId, description);
       } catch (e) {
-        log.error(LOG.TOOL, `spawn failed`, {
+        log.error(LOG.TOOL, `subagent failed`, {
           callerAlias,
           error: String(e),
         });
-        return `Error: Failed to spawn agent: ${String(e)}`;
+        return `Error: Failed to create subagent: ${String(e)}`;
       }
     },
   });

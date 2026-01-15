@@ -4,7 +4,7 @@
 
 export const BROADCAST_DESCRIPTION = `Communicate with other parallel agents. Use 'send_to' for a specific agent, or omit to message all. Use 'reply_to' to reply (auto-wires recipient to sender).`;
 
-export const SPAWN_DESCRIPTION = `Spawn a new sibling agent to work on a task in parallel. The new agent joins the network and can communicate via broadcast. Returns immediately (fire-and-forget). When the spawned agent completes, its output is piped to the caller.`;
+export const SUBAGENT_DESCRIPTION = `Spawn a new sibling agent to work on a task in parallel. The new agent joins the IAM network and can communicate via broadcast. Returns immediately (fire-and-forget).`;
 
 // =============================================================================
 // Types
@@ -91,25 +91,25 @@ export function broadcastUnknownRecipient(
   return `Error: Unknown recipient "${recipient}". ${list}`;
 }
 
-export function spawnResult(
-  spawnedAlias: string,
+export function subagentResult(
+  subagentAlias: string,
   sessionId: string,
   description: string,
 ): string {
-  return `Spawned ${spawnedAlias} (session: ${sessionId})
+  return `Spawned ${subagentAlias} (session: ${sessionId})
 Task: ${description}
 The agent is now running in parallel and can be reached via broadcast.`;
 }
 
-export const SPAWN_NOT_CHILD_SESSION = `Error: spawn can only be called from a subagent session (a session with a parentID). Main sessions should use the 'task' tool directly.`;
+export const SUBAGENT_NOT_CHILD_SESSION = `Error: subagent can only be called from a subagent session (a session with a parentID). Main sessions should use the 'task' tool directly.`;
 
-export const SPAWN_MISSING_PROMPT = `Error: 'prompt' parameter is required.`;
+export const SUBAGENT_MISSING_PROMPT = `Error: 'prompt' parameter is required.`;
 
 // =============================================================================
 // System prompt injection
 // =============================================================================
 
-import { isWorktreeEnabled, isSpawnEnabled } from "./config";
+import { isWorktreeEnabled, isSubagentEnabled } from "./config";
 
 /**
  * Get the system prompt, dynamically including sections based on config.
@@ -123,10 +123,10 @@ export function getSystemPrompt(): string {
 
 Use \`broadcast\` to communicate with other parallel agents.`);
 
-  // Spawn intro (if enabled)
-  if (isSpawnEnabled()) {
+  // Subagent intro (if enabled)
+  if (isSubagentEnabled()) {
     sections.push(
-      `Use \`spawn\` to create new sibling agents for parallel work.`,
+      `Use \`subagent\` to create new sibling agents for parallel work.`,
     );
   }
 
@@ -157,21 +157,21 @@ Each agent operates in its own isolated git worktree - a clean checkout from the
 
 **Important:** Broadcasting without \`send_to\` updates your status but does NOT queue a message. Use \`send_to\` for direct communication that needs a reply.`);
 
-  // Spawn section (only if enabled)
-  if (isSpawnEnabled()) {
-    const spawnSection = isWorktreeEnabled()
+  // Subagent section (only if enabled)
+  if (isSubagentEnabled()) {
+    const subagentSection = isWorktreeEnabled()
       ? `
 ## Spawning Agents
-- \`spawn(prompt="...", description="...")\` → create a sibling agent
-- **Fire-and-forget**: spawn() returns immediately, you continue working
-- **Output piping**: When spawned agent completes, its output arrives as a message
-- Spawned agents get their own isolated worktrees`
+- \`subagent(prompt="...", description="...")\` → create a sibling agent
+- **Fire-and-forget**: subagent() returns immediately, you continue working
+- **Output piping**: When subagent completes, its output arrives as a message
+- Subagents get their own isolated worktrees`
       : `
 ## Spawning Agents
-- \`spawn(prompt="...", description="...")\` → create a sibling agent
-- **Fire-and-forget**: spawn() returns immediately, you continue working
-- **Output piping**: When spawned agent completes, its output arrives as a message`;
-    sections.push(spawnSection);
+- \`subagent(prompt="...", description="...")\` → create a sibling agent
+- **Fire-and-forget**: subagent() returns immediately, you continue working
+- **Output piping**: When subagent completes, its output arrives as a message`;
+    sections.push(subagentSection);
   }
 
   // Receiving messages section
@@ -197,9 +197,9 @@ ${agentsDescription}
 - **messages**: Messages to reply to using \`reply_to\``);
 
   // Footer
-  if (isSpawnEnabled()) {
+  if (isSubagentEnabled()) {
     sections.push(`
-When you receive output from a spawned agent, process it and incorporate the results.`);
+When you receive output from a subagent, process it and incorporate the results.`);
   }
 
   sections.push(`</instructions>`);
