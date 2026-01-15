@@ -1,4 +1,9 @@
-import { isWorktreeEnabled, isSubagentEnabled, isRecallEnabled } from '../config';
+import {
+  isBroadcastEnabled,
+  isWorktreeEnabled,
+  isSubagentEnabled,
+  isRecallEnabled,
+} from '../config';
 
 // =============================================================================
 // System prompt injection
@@ -54,6 +59,7 @@ export function getSystemPrompt(options?: {
   maxDepth?: number;
 }): string {
   const worktree = isWorktreeEnabled();
+  const broadcast = isBroadcastEnabled();
   const subagent = isSubagentEnabled();
   const recall = isRecallEnabled();
   const allowSubagent = options?.allowSubagent ?? subagent;
@@ -82,32 +88,52 @@ export function getSystemPrompt(options?: {
     '<instructions tool="pocket-universe">',
     '# Pocket Universe — Parallel Agent Orchestration',
     '',
-    'Use `broadcast` to communicate with other parallel agents.',
+    ...(broadcast ? ['Use `broadcast` to communicate with other parallel agents.'] : []),
     subagentIntro,
     '',
-    '## IMPORTANT: Announce Yourself First',
-    'Your first action should be calling `broadcast(message="what you\'re working on")` to announce yourself. Until you do, other agents won\'t know your purpose.',
+    ...(broadcast
+      ? [
+          '## IMPORTANT: Announce Yourself First',
+          'Your first action should be calling `broadcast(message="what you\'re working on")` to announce yourself. Until you do, other agents won\'t know your purpose.',
+          '',
+          `**Status updates**: Calling \`broadcast(message="...")\` without \`send_to\` updates your status. This is passive visibility — other agents see your status history when they broadcast. Use status updates to track progress (e.g., "searching for X", "found X", "implementing Y"). Status updates do NOT send messages or wake other agents.`,
+        ]
+      : []),
+    ...(worktree && broadcast
+      ? [SECTION_WORKTREE]
+      : worktree && !broadcast
+        ? [SECTION_WORKTREE]
+        : []),
     '',
-    `**Status updates**: Calling \`broadcast(message="...")\` without \`send_to\` updates your status. This is passive visibility — other agents see your status history when they broadcast. Use status updates to track progress (e.g., "searching for X", "found X", "implementing Y"). Status updates do NOT send messages or wake other agents.${worktree ? SECTION_WORKTREE : ''}`,
+    ...(broadcast
+      ? [
+          '## Sending Messages',
+          '- `broadcast(message="...")` → **status update** (visible to all, not a message)',
+          '- `broadcast(send_to="agentB", message="...")` → send message to specific agent',
+          '- `broadcast(reply_to=1, message="...")` → reply to message #1',
+          '',
+          '**Important:** Broadcasting without `send_to` updates your status but does NOT queue a message. Use `send_to` for direct communication that needs a reply.',
+        ]
+      : []),
+    ...(subagentSection ? [subagentSection] : []),
+    ...(recall ? [SECTION_RECALL] : []),
     '',
-    '## Sending Messages',
-    '- `broadcast(message="...")` → **status update** (visible to all, not a message)',
-    '- `broadcast(send_to="agentB", message="...")` → send message to specific agent',
-    '- `broadcast(reply_to=1, message="...")` → reply to message #1',
-    '',
-    `**Important:** Broadcasting without \`send_to\` updates your status but does NOT queue a message. Use \`send_to\` for direct communication that needs a reply.${subagentSection}${recall ? SECTION_RECALL : ''}`,
-    '',
-    '## Receiving Messages',
-    'Messages appear as synthetic `broadcast` tool results:',
-    '```',
-    '{',
-    `  agents: [${agentExample}],`,
-    `  messages: [{ id: 1, from: "agentA", content: "..." }]`,
-    '}',
-    '```',
-    '',
-    agentsDescription,
-    `- **messages**: Messages to reply to using \`reply_to\`${subagentFooter}`,
+    ...(broadcast
+      ? [
+          '## Receiving Messages',
+          'Messages appear as synthetic `broadcast` tool results:',
+          '```',
+          '{',
+          `  agents: [${agentExample}],`,
+          `  messages: [{ id: 1, from: "agentA", content: "..." }]`,
+          '}',
+          '```',
+          '',
+          agentsDescription,
+          `- **messages**: Messages to reply to using \`reply_to\``,
+        ]
+      : []),
+    ...(subagentFooter ? [subagentFooter] : []),
     '</instructions>',
   ];
 

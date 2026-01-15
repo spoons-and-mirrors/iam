@@ -1,12 +1,13 @@
 import { log, LOG } from '../logger';
 import type { OpenCodeSessionClient, ConfigTransformOutput } from '../types';
 import { createBroadcastTool, createSubagentTool, createRecallTool } from '../tools/index';
-import { isSubagentEnabled, isRecallEnabled } from '../config';
+import { isBroadcastEnabled, isSubagentEnabled, isRecallEnabled } from '../config';
 
 export function createRegistry(client: OpenCodeSessionClient) {
   return {
     tool: {
-      broadcast: createBroadcastTool(client),
+      // Only register broadcast tool if enabled in config
+      ...(isBroadcastEnabled() ? { broadcast: createBroadcastTool(client) } : {}),
       // Only register recall tool if enabled in config
       ...(isRecallEnabled() ? { recall: createRecallTool() } : {}),
       // Only register subagent tool if enabled in config
@@ -18,7 +19,7 @@ export function createRegistry(client: OpenCodeSessionClient) {
       const experimental = output.experimental ?? {};
       const existingSubagentTools = experimental.subagent_tools ?? [];
       const toolsToAdd = [
-        'broadcast',
+        ...(isBroadcastEnabled() ? ['broadcast'] : []),
         ...(isRecallEnabled() ? ['recall'] : []),
         ...(isSubagentEnabled() ? ['subagent'] : []),
       ];

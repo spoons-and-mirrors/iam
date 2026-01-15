@@ -13,6 +13,8 @@ import * as os from 'os';
 export interface PocketUniverseConfig {
   /** Enable isolated git worktrees for each agent (default: false) */
   worktree: boolean;
+  /** Enable the broadcast tool for inter-agent messaging (default: true) */
+  broadcast: boolean;
   /** Enable the subagent tool for creating sibling agents (default: true) */
   subagent: boolean;
   /** Enable the recall tool for querying agent history (default: true) */
@@ -43,6 +45,7 @@ export interface PocketUniverseConfig {
 
 const DEFAULT_CONFIG: PocketUniverseConfig = {
   worktree: false,
+  broadcast: true,
   subagent: true,
   recall: true,
   logging: false,
@@ -161,6 +164,7 @@ function loadConfig(): PocketUniverseConfig {
       log.info(LOG.HOOK, `Config loaded`, {
         path: activeConfigPath,
         worktree: loadedConfig.worktree,
+        broadcast: loadedConfig.broadcast,
         subagent: loadedConfig.subagent,
         recall: loadedConfig.recall,
         logging: loadedConfig.logging,
@@ -190,6 +194,13 @@ export function getConfig(): PocketUniverseConfig {
  */
 export function isWorktreeEnabled(): boolean {
   return loadConfig().worktree;
+}
+
+/**
+ * Check if broadcast tool is enabled
+ */
+export function isBroadcastEnabled(): boolean {
+  return loadConfig().broadcast;
 }
 
 /**
@@ -255,6 +266,10 @@ export function getConfigTemplate(): string {
   // Enable isolated git worktrees for each agent
   // Each agent gets its own clean checkout from HEAD
   "worktree": false,
+
+  // Enable the broadcast tool for inter-agent messaging
+  // Allows agents to communicate with each other
+  "broadcast": true,
 
   // Enable the subagent tool for creating sibling agents
   // Allows agents to spawn other agents that run in parallel
