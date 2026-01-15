@@ -93,6 +93,7 @@ spawn(prompt="Build the login form", description="Login UI")
 - **Async firing**: `spawn()` returns immediately, caller continues working
 - **Output piping**: When spawned agent completes, its output arrives as a message in the caller session (and wakes it if idle)
 - **Main thread block**: The main session waits for ALL subagents to complete before continuing
+- **Model inheritance**: Spawned agents automatically inherit the caller's agent and model (no fallback to defaults)
 
 </details>
 
@@ -213,6 +214,10 @@ Note: Agent changes are preserved in their worktrees. Review and merge as needed
 ```
 
 This summary is **persisted to the database** so it survives crashes and is part of the conversation history.
+
+**Automatic cleanup:** After the summary is injected, all agent tracking state is cleared. This means the next batch of tasks starts fresh — no stale agents from previous work appear in `getParallelAgents()`.
+
+**Parallel task handling:** If the main session spawns multiple task tools in parallel (e.g., `task(agentA)` and `task(agentB)` simultaneously), the summary is only injected after ALL first-level children complete. This ensures the summary contains work from all agents, not just the first one to finish.
 
 </details>
 
