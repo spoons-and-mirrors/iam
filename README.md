@@ -334,9 +334,24 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
 
 ```jsonc
 {
+  // Enable isolated git worktrees for each agent
+  // Each agent gets its own clean checkout from HEAD
   "worktree": false,
+
+  // Enable the subagent tool for creating sibling agents
+  // Allows agents to spawn other agents that run in parallel
   "subagent": true,
+
+  // Enable the recall tool for querying agent history
+  // Allows agents to recall what previous agents accomplished
+  "recall": true,
+
+  // Enable debug logging to .logs/pocket-universe.log
   "logging": false,
+
+  // When true (default), subagent results appear in broadcast inbox.
+  // When false, subagent results are injected as persisted user message.
+  "subagent_result_forced_attention": true,
 }
 ```
 
@@ -346,6 +361,7 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
 | ---------------------------------- | ------- | ----------------------------------------------------------------------------------------------------- |
 | `worktree`                         | `false` | Create isolated git worktrees for each agent                                                          |
 | `subagent`                         | `true`  | Enable the `subagent` tool for creating sibling agents                                                |
+| `recall`                           | `true`  | Enable the `recall` tool for querying agent history                                                   |
 | `logging`                          | `false` | Write debug logs to `~/.config/opencode/plugin/iam/pocket-universe.log`                               |
 | `subagent_result_forced_attention` | `true`  | When true, subagent output appears in broadcast inbox; when false, injected as persisted user message |
 
@@ -362,6 +378,11 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
 - The `subagent` tool is not registered
 - Agents cannot create new sibling agents
 - Subagent instructions are hidden from the system prompt
+
+**`recall: false`**
+
+- The `recall` tool is not registered
+- Agents cannot query history of previous agents
 
 **`logging: false`**
 
@@ -380,40 +401,5 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
 - Forces immediate LLM attention and persists to database
 - Resume prompt shows: `[Received subagent results: resuming session...]`
 - Not replyable (it's a user message, not a broadcast)
-
-### Example Configurations
-
-**Minimal setup (no worktrees, no logging):**
-
-```jsonc
-{
-  "worktree": false,
-  "subagent": true,
-  "logging": false,
-  "subagent_result_forced_attention": true,
-}
-```
-
-**Full isolation with worktrees:**
-
-```jsonc
-{
-  "worktree": true,
-  "subagent": true,
-  "logging": true,
-  "subagent_result_forced_attention": true,
-}
-```
-
-**Simple parallel work (no subagent, no worktrees):**
-
-```jsonc
-{
-  "worktree": false,
-  "subagent": false,
-  "logging": false,
-  "subagent_result_forced_attention": true,
-}
-```
 
 </details>

@@ -109,7 +109,11 @@ export const SUBAGENT_MISSING_PROMPT = `Error: 'prompt' parameter is required.`;
 // System prompt injection
 // =============================================================================
 
-import { isWorktreeEnabled, isSubagentEnabled } from "./config";
+import {
+  isWorktreeEnabled,
+  isSubagentEnabled,
+  isRecallEnabled,
+} from "./config";
 
 /**
  * Get the system prompt, dynamically including sections based on config.
@@ -172,6 +176,13 @@ Each agent operates in its own isolated git worktree - a clean checkout from the
 - **Fire-and-forget**: subagent() returns immediately, you continue working
 - **Output piping**: When subagent completes, its output arrives as a message`;
     sections.push(subagentSection);
+  }
+
+  // Recall section (only if enabled)
+  if (isRecallEnabled()) {
+    sections.push(`
+## Querying Agent History
+Use \`recall()\` to see all agents and their status history. Use \`recall(agent_name="X", show_output=true)\` to retrieve a completed agent's final output.`);
   }
 
   // Receiving messages section

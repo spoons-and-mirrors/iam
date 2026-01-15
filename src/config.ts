@@ -15,6 +15,8 @@ export interface PocketUniverseConfig {
   worktree: boolean;
   /** Enable the subagent tool for creating sibling agents (default: true) */
   subagent: boolean;
+  /** Enable the recall tool for querying agent history (default: true) */
+  recall: boolean;
   /** Enable debug logging to .logs/pocket-universe.log (default: false) */
   logging: boolean;
   /**
@@ -32,6 +34,7 @@ export interface PocketUniverseConfig {
 const DEFAULT_CONFIG: PocketUniverseConfig = {
   worktree: false,
   subagent: true,
+  recall: true,
   logging: false,
   subagent_result_forced_attention: true,
 };
@@ -171,6 +174,13 @@ export function isSubagentEnabled(): boolean {
 }
 
 /**
+ * Check if recall tool is enabled
+ */
+export function isRecallEnabled(): boolean {
+  return loadConfig().recall;
+}
+
+/**
  * Check if logging is enabled
  */
 export function isLoggingEnabled(): boolean {
@@ -208,6 +218,10 @@ export function getConfigTemplate(): string {
   // Enable the subagent tool for creating sibling agents
   // Allows agents to spawn other agents that run in parallel
   "subagent": true,
+
+  // Enable the recall tool for querying agent history
+  // Allows agents to recall what previous agents accomplished
+  "recall": true,
 
   // Enable debug logging to .logs/pocket-universe.log
   "logging": false,

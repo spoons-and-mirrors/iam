@@ -54,7 +54,11 @@ import {
   createRecallTool,
 } from "./tools";
 import { createAgentWorktree } from "./worktree";
-import { isSubagentEnabled, isWorktreeEnabled } from "./config";
+import {
+  isSubagentEnabled,
+  isRecallEnabled,
+  isWorktreeEnabled,
+} from "./config";
 
 // ============================================================================
 // Plugin
@@ -412,7 +416,8 @@ const plugin: Plugin = async (ctx) => {
 
     tool: {
       broadcast: createBroadcastTool(client),
-      recall: createRecallTool(),
+      // Only register recall tool if enabled in config
+      ...(isRecallEnabled() ? { recall: createRecallTool() } : {}),
       // Only register subagent tool if enabled in config
       ...(isSubagentEnabled() ? { subagent: createSubagentTool(client) } : {}),
     },
@@ -723,26 +728,25 @@ Do NOT modify files outside this worktree.
       output.messages.push(inboxMsg as unknown as UserMessage);
     },
 
-    // Add broadcast and subagent to subagent_tools
+    // Add broadcast, recall, and subagent to subagent_tools (based on config)
     "experimental.config.transform": async (
       _input: unknown,
       output: ConfigTransformOutput,
     ) => {
       const experimental = output.experimental ?? {};
       const existingSubagentTools = experimental.subagent_tools ?? [];
+      const toolsToAdd = [
+        "broadcast",
+        ...(isRecallEnabled() ? ["recall"] : []),
+        ...(isSubagentEnabled() ? ["subagent"] : []),
+      ];
       output.experimental = {
         ...experimental,
-        subagent_tools: [
-          ...existingSubagentTools,
-          "broadcast",
-          "recall",
-          "subagent",
-        ],
+        subagent_tools: [...existingSubagentTools, ...toolsToAdd],
       };
-      log.info(
-        LOG.HOOK,
-        `Added 'broadcast' and 'subagent' to experimental.subagent_tools`,
-      );
+      log.info(LOG.HOOK, `Added tools to experimental.subagent_tools`, {
+        tools: toolsToAdd,
+      });
     },
   };
 };
