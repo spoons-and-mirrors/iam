@@ -581,6 +581,10 @@ Do NOT modify files outside this worktree.
         return;
       }
 
+      // Register the session early so the agent knows its alias from the start
+      // This must happen before we call getAlias() or inject any broadcasts
+      registerSession(sessionId);
+
       const unhandled = getUnhandledMessages(sessionId);
       const parallelAgents = getParallelAgents(sessionId);
 
