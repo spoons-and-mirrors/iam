@@ -84,6 +84,11 @@ export const activeSpawns = new Map<string, SpawnInfo>();
 // Key: caller session ID, Value: Set of spawned session IDs
 export const callerPendingSpawns = new Map<string, Set<string>>();
 
+// Track active first-level children per MAIN session
+// This prevents premature summary injection when main session spawns multiple task tools in parallel
+// Key: main session ID, Value: Set of active child session IDs
+export const mainSessionActiveChildren = new Map<string, Set<string>>();
+
 // ============================================================================
 // Worktree Tracking (isolated working directories per agent)
 // ============================================================================
@@ -330,6 +335,7 @@ export function cleanupCompletedAgents(): void {
     pendingSpawns: pendingSpawns.size,
     activeSpawns: activeSpawns.size,
     callerPendingSpawns: callerPendingSpawns.size,
+    mainSessionActiveChildren: mainSessionActiveChildren.size,
   };
 
   // Clear all agent-related state
@@ -347,6 +353,7 @@ export function cleanupCompletedAgents(): void {
   pendingSpawns.clear();
   activeSpawns.clear();
   callerPendingSpawns.clear();
+  mainSessionActiveChildren.clear();
   pendingTaskDescriptions.clear();
 
   // Note: We do NOT clear summaryInjectedSessions here

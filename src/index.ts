@@ -21,6 +21,7 @@ import {
   pendingSpawns,
   activeSpawns,
   callerPendingSpawns,
+  mainSessionActiveChildren,
   setStoredClient,
   getAlias,
   setDescription,
@@ -204,31 +205,69 @@ const plugin: Plugin = async (ctx) => {
 
         // Check if this is a first-level child returning to main session
         // If so, inject the Pocket Universe Summary to the main session
+        // BUT only when ALL first-level children are done
         const parentId = await getParentId(client, input.sessionID);
         if (parentId && !summaryInjectedSessions.has(parentId)) {
           // Check if parent is a main session (has no grandparent)
           const grandparentId = await getParentId(client, parentId);
           if (!grandparentId) {
-            // Parent is main session - inject the synthetic summary
-            log.info(
-              LOG.SESSION,
-              `First-level child completing, injecting Pocket Universe Summary to main`,
-              {
+            // This is a first-level child, parent is main session
+            // Remove this child from active tracking
+            const children = mainSessionActiveChildren.get(parentId);
+            if (children) {
+              children.delete(input.sessionID);
+
+              log.info(LOG.SESSION, `First-level child completed`, {
                 childSessionId: input.sessionID,
                 mainSessionId: parentId,
                 alias,
-              },
-            );
+                remainingChildren: children.size,
+              });
 
-            // Mark as injected to prevent duplicates
-            summaryInjectedSessions.add(parentId);
+              // Only inject summary when ALL children are done
+              if (children.size === 0) {
+                mainSessionActiveChildren.delete(parentId);
 
-            // Inject the summary (fire and forget - don't block completion)
-            injectPocketUniverseSummaryToMain(parentId).catch((e) =>
-              log.error(LOG.SESSION, `Failed to inject summary to main`, {
-                error: String(e),
-              }),
-            );
+                log.info(
+                  LOG.SESSION,
+                  `All first-level children complete, injecting Pocket Universe Summary to main`,
+                  {
+                    lastChildSessionId: input.sessionID,
+                    mainSessionId: parentId,
+                    alias,
+                  },
+                );
+
+                // Mark as injected to prevent duplicates
+                summaryInjectedSessions.add(parentId);
+
+                // Inject the summary (fire and forget - don't block completion)
+                injectPocketUniverseSummaryToMain(parentId).catch((e) =>
+                  log.error(LOG.SESSION, `Failed to inject summary to main`, {
+                    error: String(e),
+                  }),
+                );
+              }
+            } else {
+              // No tracking found - this shouldn't happen but handle gracefully
+              // Fall back to original behavior (inject immediately)
+              log.warn(
+                LOG.SESSION,
+                `No active children tracking found for main session, injecting summary`,
+                {
+                  childSessionId: input.sessionID,
+                  mainSessionId: parentId,
+                  alias,
+                },
+              );
+
+              summaryInjectedSessions.add(parentId);
+              injectPocketUniverseSummaryToMain(parentId).catch((e) =>
+                log.error(LOG.SESSION, `Failed to inject summary to main`, {
+                  error: String(e),
+                }),
+              );
+            }
           }
         }
 
@@ -442,6 +481,25 @@ const plugin: Plugin = async (ctx) => {
       // Check if there's a pending task description for this session's parent
       const parentId = await getParentId(client, sessionId);
       if (parentId) {
+        // Check if this is a first-level child (parent is main session)
+        const grandparentId = await getParentId(client, parentId);
+        if (!grandparentId) {
+          // Parent is main session - track this child
+          let children = mainSessionActiveChildren.get(parentId);
+          if (!children) {
+            children = new Set();
+            mainSessionActiveChildren.set(parentId, children);
+          }
+          children.add(sessionId);
+
+          log.info(LOG.HOOK, `Tracking first-level child for main session`, {
+            childSessionId: sessionId,
+            mainSessionId: parentId,
+            alias: getAlias(sessionId),
+            activeChildrenCount: children.size,
+          });
+        }
+
         const pending = pendingTaskDescriptions.get(parentId);
         if (pending && pending.length > 0) {
           // Use the first pending description for this child session
