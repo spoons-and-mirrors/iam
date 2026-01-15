@@ -423,9 +423,9 @@ export function createSubagentTaskMessage(
   const now = Date.now();
   const userInfo = baseUserMessage.info;
 
-  const assistantMessageId = `msg_suba_${subagent.sessionId.slice(-12)}`;
-  const partId = `prt_suba_${subagent.sessionId.slice(-12)}`;
-  const callId = `call_suba_${subagent.sessionId.slice(-12)}`;
+  const assistantMessageId = `msg_sub_${subagent.sessionId.slice(-12)}`;
+  const partId = `prt_sub_${subagent.sessionId.slice(-12)}`;
+  const callId = `call_sub_${subagent.sessionId.slice(-12)}`;
 
   // Build output similar to what task tool produces
   const output = `Subagent ${subagent.alias} is running.
@@ -536,8 +536,8 @@ export async function injectTaskPartToParent(
     const now = Date.now();
 
     // Step 2: Create the task tool part (NOT synthetic - visible in TUI)
-    const partId = `prt_suba_${subagent.sessionId.slice(-12)}_${now}`;
-    const callId = `call_suba_${subagent.sessionId.slice(-12)}`;
+    const partId = `prt_sub_${subagent.sessionId.slice(-12)}_${now}`;
+    const callId = `call_sub_${subagent.sessionId.slice(-12)}`;
 
     // Store part info in subagent for later completion update
     subagent.partId = partId;
@@ -814,7 +814,7 @@ export async function markSubagentCompleted(
     }
 
     // Set the part info for this completion
-    subagent.partId = `prt_suba_${subagent.sessionId.slice(-12)}_${now}`;
+    subagent.partId = `prt_sub_${subagent.sessionId.slice(-12)}_${now}`;
     subagent.parentMessageId = lastAssistantMsg.info.id;
     subagent.parentSessionId = parentId;
   }
@@ -827,7 +827,7 @@ export async function markSubagentCompleted(
     sessionID: subagent.parentSessionId,
     messageID: subagent.parentMessageId,
     type: "tool",
-    callID: `call_suba_${subagent.sessionId.slice(-12)}`,
+    callID: `call_sub_${subagent.sessionId.slice(-12)}`,
     tool: "task",
     state: {
       status: "completed",
