@@ -19,6 +19,7 @@ import {
   sessionWorktrees,
   sessionToAlias,
   agentDescriptions,
+  getStoredClient,
   PARENT_CACHE_TTL_MS,
   DEFAULT_MODEL_ID,
   DEFAULT_PROVIDER_ID,
@@ -778,6 +779,118 @@ export async function markSpawnCompleted(
   } catch (e) {
     log.error(LOG.TOOL, `Failed to mark spawn completed`, {
       alias: spawn.alias,
+      error: String(e),
+    });
+    return false;
+  }
+}
+
+// =============================================================================
+// Pocket Universe Summary (persisted to main session)
+// =============================================================================
+
+/**
+ * Generate a Pocket Universe Summary for the main session.
+ * This summarizes all agents, their status history, and worktree paths.
+ * Called when all parallel work is complete, before returning to main session.
+ */
+export function generatePocketUniverseSummary(): string | null {
+  // Collect all agents from sessionToAlias
+  // Note: Only child sessions (subagents) have aliases, so all entries are agents
+  const agents: Array<{
+    alias: string;
+    statuses: string[];
+    worktree: string | undefined;
+  }> = [];
+
+  for (const [sessionId, alias] of sessionToAlias.entries()) {
+    const statuses = agentDescriptions.get(alias) || [];
+    const worktree = isWorktreeEnabled()
+      ? sessionWorktrees.get(sessionId)
+      : undefined;
+
+    agents.push({ alias, statuses, worktree });
+  }
+
+  // If no agents, no summary needed
+  if (agents.length === 0) {
+    return null;
+  }
+
+  // Build the summary
+  const lines: string[] = [];
+  lines.push(`[Pocket Universe Summary]`);
+  lines.push(``);
+  lines.push(`The following agents completed their work:`);
+  lines.push(``);
+
+  for (const agent of agents) {
+    lines.push(`## ${agent.alias}`);
+    if (agent.worktree) {
+      lines.push(`Worktree: ${agent.worktree}`);
+    }
+    if (agent.statuses.length > 0) {
+      lines.push(`Status history:`);
+      for (const status of agent.statuses) {
+        lines.push(`  → ${status}`);
+      }
+    }
+    lines.push(``);
+  }
+
+  if (isWorktreeEnabled()) {
+    lines.push(
+      `Note: Agent changes are preserved in their worktrees. Review and merge as needed.`,
+    );
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Inject the Pocket Universe Summary as a persisted user message into the main session.
+ * Uses client.session.prompt() to persist the summary to the database.
+ */
+export async function injectPocketUniverseSummaryToMain(
+  mainSessionId: string,
+): Promise<boolean> {
+  const storedClient = getStoredClient();
+  if (!storedClient) {
+    log.warn(LOG.SESSION, `Cannot inject summary - no client available`);
+    return false;
+  }
+
+  const summary = generatePocketUniverseSummary();
+  if (!summary) {
+    log.info(
+      LOG.SESSION,
+      `No agents to summarize, skipping pocket universe summary`,
+    );
+    return false;
+  }
+
+  log.info(LOG.SESSION, `Injecting Pocket Universe Summary to main session`, {
+    mainSessionId,
+    summaryLength: summary.length,
+  });
+
+  try {
+    // Inject as a persisted user message
+    await storedClient.session.prompt({
+      path: { id: mainSessionId },
+      body: {
+        parts: [{ type: "text", text: summary }],
+      },
+    });
+
+    log.info(LOG.SESSION, `Pocket Universe Summary injected successfully`, {
+      mainSessionId,
+    });
+
+    return true;
+  } catch (e) {
+    log.error(LOG.SESSION, `Failed to inject Pocket Universe Summary`, {
+      mainSessionId,
       error: String(e),
     });
     return false;

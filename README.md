@@ -159,7 +159,12 @@ Messages appear as synthetic `broadcast` tool results:
   "state": {
     "input": { "synthetic": true },
     "output": {
-      "agents": [{ "name": "agentA", "status": "Working on frontend" }],
+      "agents": [
+        {
+          "name": "agentA",
+          "status": ["searching for X", "found X in file.ts"]
+        }
+      ],
       "messages": [{ "id": 1, "from": "agentA", "content": "Need help?" }]
     }
   }
@@ -167,8 +172,45 @@ Messages appear as synthetic `broadcast` tool results:
 ```
 
 - **`synthetic: true`** — Injected by Pocket Universe, not a real tool call
-- **`agents`** — All sibling agents and their status (always visible)
+- **`agents`** — All sibling agents and their status history (array of status updates)
 - **`messages`** — Inbox messages, reply using `reply_to`
+
+</details>
+
+<details>
+<summary>Pocket Universe Summary</summary>
+
+When all parallel agent work completes, the main session receives a **Pocket Universe Summary** as a persisted user message. This includes:
+
+- All agents that ran
+- Their full status history
+- Their worktree paths (if enabled)
+
+Example summary:
+
+```
+[Pocket Universe Summary]
+
+The following agents completed their work:
+
+## agentA
+Worktree: /repo/.worktrees/agentA
+Status history:
+  → searching for auth implementation
+  → found auth in src/auth.ts
+  → sending findings to agentB
+
+## agentB
+Worktree: /repo/.worktrees/agentB
+Status history:
+  → implementing login form
+  → integrating auth from agentA
+  → completed login feature
+
+Note: Agent changes are preserved in their worktrees. Review and merge as needed.
+```
+
+This summary is **persisted to the database** so it survives crashes and is part of the conversation history.
 
 </details>
 

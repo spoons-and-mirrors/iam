@@ -19,7 +19,7 @@ import { log, LOG } from "./logger";
 export const CHAR_CODE_A = 65; // ASCII code for 'A'
 export const ALPHABET_SIZE = 26;
 export const MAX_DESCRIPTION_LENGTH = 300;
-export const MAX_STATUS_HISTORY = 10; // Keep last N status updates per agent
+export const MAX_STATUS_HISTORY = 50; // Keep last N status updates per agent
 export const MESSAGE_TTL_MS = 30 * 60 * 1000; // 30 minutes for handled messages
 export const UNHANDLED_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours for unhandled messages
 export const MAX_INBOX_SIZE = 100; // Max messages per inbox
@@ -45,6 +45,9 @@ export const activeSessions = new Set<string>();
 
 // Track sessions that have announced themselves (called broadcast at least once)
 export const announcedSessions = new Set<string>();
+
+// Track sessions that have had pocket universe summary injected (prevent double injection)
+export const summaryInjectedSessions = new Set<string>();
 
 // Alias mappings: sessionId <-> alias (e.g., "agentA", "agentB")
 export const sessionToAlias = new Map<string, string>();

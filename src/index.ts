@@ -15,6 +15,7 @@ import {
   sessionToAlias,
   sessionStates,
   announcedSessions,
+  summaryInjectedSessions,
   pendingTaskDescriptions,
   pendingSpawns,
   activeSpawns,
@@ -40,6 +41,7 @@ import {
   fetchSpawnOutput,
   markSpawnCompleted,
 } from "./messaging";
+import { injectPocketUniverseSummaryToMain } from "./injection";
 import { createBroadcastTool, createSpawnTool } from "./tools";
 import { createAgentWorktree } from "./worktree";
 import { isSpawnEnabled, isWorktreeEnabled } from "./config";
@@ -195,6 +197,37 @@ const plugin: Plugin = async (ctx) => {
           alias,
           iterations: iteration,
         });
+
+        // Check if this is a first-level child returning to main session
+        // If so, inject the Pocket Universe Summary to the main session
+        const parentId = await getParentId(client, input.sessionID);
+        if (parentId && !summaryInjectedSessions.has(parentId)) {
+          // Check if parent is a main session (has no grandparent)
+          const grandparentId = await getParentId(client, parentId);
+          if (!grandparentId) {
+            // Parent is main session - inject the summary
+            log.info(
+              LOG.SESSION,
+              `First-level child completing, injecting Pocket Universe Summary to main`,
+              {
+                childSessionId: input.sessionID,
+                mainSessionId: parentId,
+                alias,
+              },
+            );
+
+            // Mark as injected to prevent duplicates
+            summaryInjectedSessions.add(parentId);
+
+            // Inject the summary (fire and forget - don't block completion)
+            injectPocketUniverseSummaryToMain(parentId).catch((e) =>
+              log.error(LOG.SESSION, `Failed to inject summary to main`, {
+                error: String(e),
+              }),
+            );
+          }
+        }
+
         break;
       }
     },
@@ -508,19 +541,9 @@ Do NOT modify files outside this worktree.
 
       // Only inject Pocket Universe broadcast/inbox for child sessions (those with parentID)
       if (!(await isChildSession(client, sessionId))) {
-        // For main sessions, inject worktree summary if worktree feature is enabled
-        if (isWorktreeEnabled()) {
-          const worktreeSummary = createWorktreeSummaryMessage(
-            sessionId,
-            lastUserMsg,
-          );
-          if (worktreeSummary) {
-            output.messages.push(worktreeSummary as unknown as UserMessage);
-            log.info(LOG.INJECT, `Injected worktree summary for main session`, {
-              sessionId,
-            });
-          }
-        }
+        // Main sessions don't get ephemeral injections
+        // They receive a persisted Pocket Universe Summary when all work completes
+        // (injected via injectPocketUniverseSummaryToMain in session.before_complete)
 
         log.debug(
           LOG.INJECT,
