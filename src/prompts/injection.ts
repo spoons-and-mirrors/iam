@@ -8,10 +8,7 @@ export const ANNOUNCE_HINT = `Call broadcast(message='what you are working on') 
 // Agent completion prompts
 // =============================================================================
 
-export function agentCompletedMessage(
-  alias: string,
-  sessionId?: string,
-): string {
+export function agentCompletedMessage(alias: string, sessionId?: string): string {
   if (sessionId) {
     return `Agent ${alias} completed.\nSession: ${sessionId}`;
   }
@@ -26,17 +23,11 @@ export function agentCompletedWithSummary(
   return `Agent ${alias} completed:\n${summary}\n\n<task_metadata>\nsession_id: ${sessionId}\n</task_metadata>`;
 }
 
-export function subagentCompletedSummary(
-  alias: string,
-  sessionId: string,
-): string {
+export function subagentCompletedSummary(alias: string, sessionId: string): string {
   return `Agent ${alias} completed successfully.\nOutput was piped to the caller.\n\n<task_metadata>\nsession_id: ${sessionId}\n</task_metadata>`;
 }
 
-export function subagentRunningMessage(
-  alias: string,
-  sessionId: string,
-): string {
+export function subagentRunningMessage(alias: string, sessionId: string): string {
   return `Subagent ${alias} is running in parallel.\nSession: ${sessionId}`;
 }
 
@@ -44,10 +35,7 @@ export function wrapTaskMetadata(sessionId: string): string {
   return `\n\n<task_metadata>\nsession_id: ${sessionId}\n</task_metadata>`;
 }
 
-export function taskOutputWithMetadata(
-  text: string,
-  sessionId: string,
-): string {
+export function taskOutputWithMetadata(text: string, sessionId: string): string {
   return text + wrapTaskMetadata(sessionId);
 }
 
@@ -70,10 +58,6 @@ export const WORKTREE_SUMMARY_NOTE = `Changes made by agents are preserved in th
 // Task injection prompts
 // =============================================================================
 
-export function subagentTaskOutput(
-  alias: string,
-  description: string,
-  sessionId: string,
-): string {
+export function subagentTaskOutput(alias: string, description: string, sessionId: string): string {
   return `Subagent ${alias} is running.\nTask: ${description}\n\n<task_metadata>\nsession_id: ${sessionId}\n</task_metadata>`;
 }

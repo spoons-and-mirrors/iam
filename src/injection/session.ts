@@ -2,13 +2,9 @@
 // Session helpers for injection
 // =============================================================================
 
-import type { OpenCodeSessionClient } from "../types";
-import { log, LOG } from "../logger";
-import {
-  sessionParentCache,
-  childSessionCache,
-  PARENT_CACHE_TTL_MS,
-} from "../state";
+import type { OpenCodeSessionClient } from '../types';
+import { log, LOG } from '../logger';
+import { sessionParentCache, childSessionCache, PARENT_CACHE_TTL_MS } from '../state';
 
 // DORMANT: parent alias feature
 export async function getParentId(

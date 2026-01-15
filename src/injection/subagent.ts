@@ -8,7 +8,7 @@ import type {
   AssistantMessage,
   SubagentInfo,
   InternalClient,
-} from "../types";
+} from '../types';
 import {
   agentCompletedMessage,
   agentCompletedWithSummary,
@@ -16,15 +16,10 @@ import {
   subagentRunningMessage,
   taskOutputWithMetadata,
   subagentTaskOutput,
-} from "../prompts/injection";
-import { log, LOG } from "../logger";
-import {
-  activeSubagents,
-  sessionToAlias,
-  DEFAULT_MODEL_ID,
-  DEFAULT_PROVIDER_ID,
-} from "../state";
-import { getParentIdForSubagent } from "./session";
+} from '../prompts/injection';
+import { log, LOG } from '../logger';
+import { activeSubagents, sessionToAlias, DEFAULT_MODEL_ID, DEFAULT_PROVIDER_ID } from '../state';
+import { getParentIdForSubagent } from './session';
 
 /**
  * Create a synthetic task tool message to inject into parent session
@@ -43,11 +38,7 @@ export function createSubagentTaskMessage(
   const callId = `call_sub_${subagent.sessionId.slice(-12)}`;
 
   // Build output similar to what task tool produces
-  const output = subagentTaskOutput(
-    subagent.alias,
-    subagent.description,
-    subagent.sessionId,
-  );
+  const output = subagentTaskOutput(subagent.alias, subagent.description, subagent.sessionId);
 
   log.info(LOG.MESSAGE, `Creating synthetic task injection`, {
     parentSessionId,
@@ -59,13 +50,13 @@ export function createSubagentTaskMessage(
     info: {
       id: assistantMessageId,
       sessionID: parentSessionId,
-      role: "assistant",
-      agent: userInfo.agent || "code",
+      role: 'assistant',
+      agent: userInfo.agent || 'code',
       parentID: userInfo.id,
       modelID: userInfo.model?.modelID || DEFAULT_MODEL_ID,
       providerID: userInfo.model?.providerID || DEFAULT_PROVIDER_ID,
-      mode: "default",
-      path: { cwd: "/", root: "/" },
+      mode: 'default',
+      path: { cwd: '/', root: '/' },
       time: { created: subagent.timestamp, completed: now },
       cost: 0,
       tokens: {
@@ -80,15 +71,15 @@ export function createSubagentTaskMessage(
         id: partId,
         sessionID: parentSessionId,
         messageID: assistantMessageId,
-        type: "tool",
+        type: 'tool',
         callID: callId,
-        tool: "task",
+        tool: 'task',
         state: {
-          status: "completed",
+          status: 'completed',
           input: {
             description: subagent.description,
             prompt: subagent.prompt,
-            subagent_type: "general",
+            subagent_type: 'general',
             synthetic: true, // Indicates this was created by Pocket Universe
           },
           output,
@@ -135,9 +126,7 @@ export async function injectTaskPartToParent(
     }
 
     // Find the last assistant message to attach to
-    const lastAssistantMsg = [...messages]
-      .reverse()
-      .find((m) => m.info.role === "assistant");
+    const lastAssistantMsg = [...messages].reverse().find((m) => m.info.role === 'assistant');
 
     if (!lastAssistantMsg) {
       log.warn(LOG.TOOL, `No assistant message found in parent session`, {
@@ -162,15 +151,15 @@ export async function injectTaskPartToParent(
       id: partId,
       sessionID: parentSessionId,
       messageID: messageId,
-      type: "tool",
+      type: 'tool',
       callID: callId,
-      tool: "task",
+      tool: 'task',
       state: {
-        status: "running", // Show as running since it's executing in parallel
+        status: 'running', // Show as running since it's executing in parallel
         input: {
           description: subagent.description,
           prompt: subagent.prompt,
-          subagent_type: "general",
+          subagent_type: 'general',
         },
         output: subagentRunningMessage(subagent.alias, subagent.sessionId),
         title: subagent.description,
@@ -190,12 +179,10 @@ export async function injectTaskPartToParent(
     });
 
     // Step 3: PATCH the part to the parent session using internal HTTP client
-    const httpClient = (client as unknown as { client?: InternalClient })
-      .client;
+    const httpClient = (client as unknown as { client?: InternalClient }).client;
     if (!httpClient?.patch) {
       // Try alternative access pattern
-      const altClient = (client as unknown as { _client?: InternalClient })
-        ._client;
+      const altClient = (client as unknown as { _client?: InternalClient })._client;
       if (altClient?.patch) {
         await (
           altClient as unknown as {
@@ -265,9 +252,7 @@ export async function fetchSubagentOutput(
     }
 
     // Find assistant messages and extract text parts (like native Task tool does)
-    const assistantMessages = messages.filter(
-      (m) => m.info.role === "assistant",
-    );
+    const assistantMessages = messages.filter((m) => m.info.role === 'assistant');
 
     if (assistantMessages.length === 0) {
       log.warn(LOG.TOOL, `No assistant messages in subagent session`, {
@@ -282,13 +267,9 @@ export async function fetchSubagentOutput(
     const parts = lastAssistant.parts || [];
 
     // Find the last text part (like native Task tool: result.parts.findLast(x => x.type === "text"))
-    const textParts = parts.filter(
-      (p: unknown) => (p as { type?: string }).type === "text",
-    );
-    const lastTextPart = textParts[textParts.length - 1] as
-      | { text?: string }
-      | undefined;
-    const text = lastTextPart?.text || "";
+    const textParts = parts.filter((p: unknown) => (p as { type?: string }).type === 'text');
+    const lastTextPart = textParts[textParts.length - 1] as { text?: string } | undefined;
+    const text = lastTextPart?.text || '';
 
     if (text) {
       log.info(LOG.TOOL, `Extracted output from subagent session`, {
@@ -301,16 +282,14 @@ export async function fetchSubagentOutput(
     }
 
     // Fallback: summarize tool calls if no text
-    const toolParts = parts.filter(
-      (p: unknown) => (p as { type?: string }).type === "tool",
-    );
+    const toolParts = parts.filter((p: unknown) => (p as { type?: string }).type === 'tool');
     if (toolParts.length > 0) {
       const summary = toolParts
         .map((p: unknown) => {
           const part = p as { tool?: string; state?: { title?: string } };
-          return `- ${part.tool}: ${part.state?.title || "completed"}`;
+          return `- ${part.tool}: ${part.state?.title || 'completed'}`;
         })
-        .join("\n");
+        .join('\n');
       return agentCompletedWithSummary(alias, summary, sessionId);
     }
 
@@ -337,11 +316,7 @@ export async function markSubagentCompleted(
   client: OpenCodeSessionClient,
   subagent: SubagentInfo,
 ): Promise<boolean> {
-  if (
-    !subagent.partId ||
-    !subagent.parentMessageId ||
-    !subagent.parentSessionId
-  ) {
+  if (!subagent.partId || !subagent.parentMessageId || !subagent.parentSessionId) {
     log.warn(LOG.TOOL, `Cannot mark subagent completed - missing part info`, {
       alias: subagent.alias,
       hasPartId: !!subagent.partId,
@@ -354,15 +329,10 @@ export async function markSubagentCompleted(
   const now = Date.now();
 
   // If we don't have part info (no immediate injection was done), inject now
-  if (
-    !subagent.partId ||
-    !subagent.parentMessageId ||
-    !subagent.parentSessionId
-  ) {
+  if (!subagent.partId || !subagent.parentMessageId || !subagent.parentSessionId) {
     // Get the parent session ID from the subagent session
     const parentId =
-      subagent.parentSessionId ||
-      (await getParentIdForSubagent(client, subagent.sessionId));
+      subagent.parentSessionId || (await getParentIdForSubagent(client, subagent.sessionId));
     if (!parentId) {
       log.warn(LOG.TOOL, `Cannot mark subagent completed - no parent session`, {
         alias: subagent.alias,
@@ -377,20 +347,14 @@ export async function markSubagentCompleted(
 
     const messages = messagesResult.data;
     if (!messages || messages.length === 0) {
-      log.warn(
-        LOG.TOOL,
-        `No messages in parent session for completion injection`,
-        {
-          parentId,
-          alias: subagent.alias,
-        },
-      );
+      log.warn(LOG.TOOL, `No messages in parent session for completion injection`, {
+        parentId,
+        alias: subagent.alias,
+      });
       return false;
     }
 
-    const lastAssistantMsg = [...messages]
-      .reverse()
-      .find((m) => m.info.role === "assistant");
+    const lastAssistantMsg = [...messages].reverse().find((m) => m.info.role === 'assistant');
 
     if (!lastAssistantMsg) {
       log.warn(LOG.TOOL, `No assistant message for completion injection`, {
@@ -407,24 +371,21 @@ export async function markSubagentCompleted(
   }
 
   // Summary only - full output is piped to the caller, not stored here
-  const summaryOutput = subagentCompletedSummary(
-    subagent.alias,
-    subagent.sessionId,
-  );
+  const summaryOutput = subagentCompletedSummary(subagent.alias, subagent.sessionId);
 
   const completedPart = {
     id: subagent.partId,
     sessionID: subagent.parentSessionId,
     messageID: subagent.parentMessageId,
-    type: "tool",
+    type: 'tool',
     callID: `call_sub_${subagent.sessionId.slice(-12)}`,
-    tool: "task",
+    tool: 'task',
     state: {
-      status: "completed",
+      status: 'completed',
       input: {
         description: subagent.description,
         prompt: subagent.prompt,
-        subagent_type: "general",
+        subagent_type: 'general',
       },
       output: summaryOutput,
       title: subagent.description,
@@ -437,15 +398,9 @@ export async function markSubagentCompleted(
   };
 
   try {
-    const httpClient = (client as unknown as { client?: InternalClient })
-      .client;
-    const altClient = (client as unknown as { _client?: InternalClient })
-      ._client;
-    const patchClient = httpClient?.patch
-      ? httpClient
-      : altClient?.patch
-        ? altClient
-        : null;
+    const httpClient = (client as unknown as { client?: InternalClient }).client;
+    const altClient = (client as unknown as { _client?: InternalClient })._client;
+    const patchClient = httpClient?.patch ? httpClient : altClient?.patch ? altClient : null;
 
     if (!patchClient?.patch) {
       log.warn(LOG.TOOL, `No HTTP client for marking subagent completed`);

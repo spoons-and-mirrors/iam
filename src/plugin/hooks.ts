@@ -1,6 +1,6 @@
-import { getSystemPrompt, getWorktreeSystemPrompt } from "../prompts/system";
-import { resumeBroadcastPrompt } from "../prompts/broadcast.prompts";
-import { log, LOG } from "../logger";
+import { getSystemPrompt, getWorktreeSystemPrompt } from '../prompts/system';
+import { resumeBroadcastPrompt } from '../prompts/broadcast.prompts';
+import { log, LOG } from '../logger';
 import type {
   OpenCodeSessionClient,
   ToolExecuteInput,
@@ -9,7 +9,7 @@ import type {
   SystemTransformOutput,
   MessagesTransformOutput,
   UserMessage,
-} from "../types";
+} from '../types';
 import {
   sessionToAlias,
   sessionStates,
@@ -29,14 +29,14 @@ import {
   setWorktree,
   setCurrentPocketId,
   getCurrentPocketId,
-} from "../state";
+} from '../state';
 import {
   resumeSessionWithBroadcast,
   getUnhandledMessages,
   getMessagesNeedingResume,
   markMessagesAsPresented,
   getParallelAgents,
-} from "../messaging";
+} from '../messaging';
 import {
   getParentId,
   getSessionDepth,
@@ -47,25 +47,25 @@ import {
   markSubagentCompleted,
   injectPocketUniverseSummaryToMain,
   createSummaryCoverMessage,
-} from "../injection/index";
-import { createAgentWorktree } from "../worktree";
-import { getMaxSubagentDepth, isWorktreeEnabled } from "../config";
+} from '../injection/index';
+import { createAgentWorktree } from '../worktree';
+import { getMaxSubagentDepth, isWorktreeEnabled } from '../config';
 
 export function createHooks(client: OpenCodeSessionClient) {
   return {
     // Allow main session to wait for subagent grandchild sessions AND resumed sessions
-    "session.before_complete": async (
+    'session.before_complete': async (
       input: { sessionID: string; parentSessionID?: string },
       output: { waitForSessions: string[]; resumePrompt?: string },
     ) => {
-      const alias = sessionToAlias.get(input.sessionID) || "unknown";
+      const alias = sessionToAlias.get(input.sessionID) || 'unknown';
 
       // Helper to wait for a session to become idle
       const waitForSessionIdle = (targetSessionId: string): Promise<void> => {
         return new Promise((resolve) => {
           const checkIdle = () => {
             const state = sessionStates.get(targetSessionId);
-            if (state?.status === "idle") {
+            if (state?.status === 'idle') {
               resolve();
               return true;
             }
@@ -207,14 +207,10 @@ export function createHooks(client: OpenCodeSessionClient) {
           // This avoids the deadlock of calling prompt() from within the hook
           output.resumePrompt = resumeBroadcastPrompt(firstUnread.from);
 
-          log.info(
-            LOG.SESSION,
-            `session.before_complete: resumePrompt set, breaking loop`,
-            {
-              sessionID: input.sessionID,
-              alias,
-            },
-          );
+          log.info(LOG.SESSION, `session.before_complete: resumePrompt set, breaking loop`, {
+            sessionID: input.sessionID,
+            alias,
+          });
 
           // Break out - OpenCode will handle the resume and call this hook again
           break;
@@ -274,11 +270,10 @@ export function createHooks(client: OpenCodeSessionClient) {
                 summaryInjectedSessions.add(parentId);
 
                 // Inject the summary (fire and forget - don't block completion)
-                injectPocketUniverseSummaryToMain(parentId).catch(
-                  (e: unknown) =>
-                    log.error(LOG.SESSION, `Failed to inject summary to main`, {
-                      error: String(e),
-                    }),
+                injectPocketUniverseSummaryToMain(parentId).catch((e: unknown) =>
+                  log.error(LOG.SESSION, `Failed to inject summary to main`, {
+                    error: String(e),
+                  }),
                 );
               }
             } else {
@@ -309,7 +304,7 @@ export function createHooks(client: OpenCodeSessionClient) {
     },
 
     // Track session idle events for broadcast resumption AND subagent completion
-    "session.idle": async ({ sessionID }: { sessionID: string }) => {
+    'session.idle': async ({ sessionID }: { sessionID: string }) => {
       // Check if this is a registered Pocket Universe session (child session)
       const alias = sessionToAlias.get(sessionID);
       const hasPendingSubagents = callerPendingSubagents.has(sessionID);
@@ -317,7 +312,7 @@ export function createHooks(client: OpenCodeSessionClient) {
 
       log.info(LOG.SESSION, `session.idle hook fired`, {
         sessionID,
-        alias: alias || "unknown",
+        alias: alias || 'unknown',
         hasPendingSubagents,
         pendingSubagentCount: pendingCount,
       });
@@ -326,7 +321,7 @@ export function createHooks(client: OpenCodeSessionClient) {
         sessionStates.set(sessionID, {
           sessionId: sessionID,
           alias,
-          status: "idle",
+          status: 'idle',
           lastActivity: Date.now(),
         });
         log.info(LOG.SESSION, `Session marked idle`, { sessionID, alias });
@@ -351,16 +346,12 @@ export function createHooks(client: OpenCodeSessionClient) {
     },
 
     // Track when task tools complete - mark subtask sessions as idle
-    "tool.execute.after": async (
-      input: ToolExecuteInput,
-      output: ToolExecuteOutput,
-    ) => {
+    'tool.execute.after': async (input: ToolExecuteInput, output: ToolExecuteOutput) => {
       // Only care about task tool completions
-      if (input.tool !== "task") return;
+      if (input.tool !== 'task') return;
 
       // Get the subtask session ID from metadata
-      const subtaskSessionId =
-        output?.metadata?.sessionId || output?.metadata?.session_id;
+      const subtaskSessionId = output?.metadata?.sessionId || output?.metadata?.session_id;
 
       if (subtaskSessionId) {
         const alias = sessionToAlias.get(subtaskSessionId);
@@ -383,7 +374,7 @@ export function createHooks(client: OpenCodeSessionClient) {
           sessionStates.set(subtaskSessionId, {
             sessionId: subtaskSessionId,
             alias,
-            status: "idle",
+            status: 'idle',
             lastActivity: Date.now(),
           });
           log.info(LOG.SESSION, `Task completed, session marked idle`, {
@@ -395,15 +386,11 @@ export function createHooks(client: OpenCodeSessionClient) {
           // If so, resume the session so it can process them
           const unreadMessages = getMessagesNeedingResume(subtaskSessionId);
           if (unreadMessages.length > 0) {
-            log.info(
-              LOG.SESSION,
-              `Session has unread messages on idle, resuming`,
-              {
-                subtaskSessionId,
-                alias,
-                unreadCount: unreadMessages.length,
-              },
-            );
+            log.info(LOG.SESSION, `Session has unread messages on idle, resuming`, {
+              subtaskSessionId,
+              alias,
+              unreadCount: unreadMessages.length,
+            });
 
             // Resume with the first unread message
             const firstUnread = unreadMessages[0];
@@ -412,14 +399,11 @@ export function createHooks(client: OpenCodeSessionClient) {
             // Mark this message as presented BEFORE resuming to avoid infinite loop
             markMessagesAsPresented(subtaskSessionId, [firstUnread.msgIndex]);
 
-            resumeSessionWithBroadcast(
-              subtaskSessionId,
-              senderAlias,
-              firstUnread.body,
-            ).catch((e: unknown) =>
-              log.error(LOG.SESSION, `Failed to resume with unread message`, {
-                error: String(e),
-              }),
+            resumeSessionWithBroadcast(subtaskSessionId, senderAlias, firstUnread.body).catch(
+              (e: unknown) =>
+                log.error(LOG.SESSION, `Failed to resume with unread message`, {
+                  error: String(e),
+                }),
             );
           }
         } else {
@@ -431,7 +415,7 @@ export function createHooks(client: OpenCodeSessionClient) {
     },
 
     // Capture task description before execution
-    "tool.execute.before": async (input: unknown, output: unknown) => {
+    'tool.execute.before': async (input: unknown, output: unknown) => {
       const typedInput = input as {
         tool: string;
         sessionID: string;
@@ -448,7 +432,7 @@ export function createHooks(client: OpenCodeSessionClient) {
         hasDescription: !!typedOutput?.args?.description,
       });
 
-      if (typedInput.tool === "task" && typedOutput?.args?.description) {
+      if (typedInput.tool === 'task' && typedOutput?.args?.description) {
         const description = typedOutput.args.description;
         const parentSessionId = typedInput.sessionID;
 
@@ -467,26 +451,21 @@ export function createHooks(client: OpenCodeSessionClient) {
 
     // PRE-REGISTER agents on first LLM call + inject system prompt
     // Only for child sessions (those with parentID)
-    "experimental.chat.system.transform": async (
+    'experimental.chat.system.transform': async (
       input: SystemTransformInput,
       output: SystemTransformOutput,
     ) => {
       const sessionId = input.sessionID;
       if (!sessionId) {
-        log.debug(
-          LOG.INJECT,
-          `No sessionID in system.transform input, skipping`,
-        );
+        log.debug(LOG.INJECT, `No sessionID in system.transform input, skipping`);
         return;
       }
 
       // Only inject for child sessions (those with parentID)
       if (!(await isChildSession(client, sessionId))) {
-        log.debug(
-          LOG.INJECT,
-          `Session has no parentID (main session), skipping Pocket Universe`,
-          { sessionId },
-        );
+        log.debug(LOG.INJECT, `Session has no parentID (main session), skipping Pocket Universe`, {
+          sessionId,
+        });
         return;
       }
 
@@ -526,15 +505,11 @@ export function createHooks(client: OpenCodeSessionClient) {
           // Track this child (unless already completed)
           const completed = completedFirstLevelChildren.get(parentId);
           if (completed?.has(sessionId)) {
-            log.debug(
-              LOG.HOOK,
-              `Skipping tracking for completed first-level child`,
-              {
-                childSessionId: sessionId,
-                mainSessionId: parentId,
-                alias: getAlias(sessionId),
-              },
-            );
+            log.debug(LOG.HOOK, `Skipping tracking for completed first-level child`, {
+              childSessionId: sessionId,
+              mainSessionId: parentId,
+              alias: getAlias(sessionId),
+            });
           } else {
             let children = mainSessionActiveChildren.get(parentId);
             if (!children) {
@@ -558,16 +533,12 @@ export function createHooks(client: OpenCodeSessionClient) {
           const description = pending.shift()!;
           setDescription(sessionId, description);
 
-          log.info(
-            LOG.HOOK,
-            `Applied task description as initial agent status`,
-            {
-              sessionId,
-              alias: getAlias(sessionId),
-              description: description.substring(0, 80),
-              remainingPending: pending.length,
-            },
-          );
+          log.info(LOG.HOOK, `Applied task description as initial agent status`, {
+            sessionId,
+            alias: getAlias(sessionId),
+            description: description.substring(0, 80),
+            remainingPending: pending.length,
+          });
 
           // Clean up if empty
           if (pending.length === 0) {
@@ -597,28 +568,20 @@ export function createHooks(client: OpenCodeSessionClient) {
         }
       }
 
-      log.info(
-        LOG.INJECT,
-        `Registered session and injected Pocket Universe system prompt`,
-        {
-          sessionId,
-          alias: getAlias(sessionId),
-          worktree: isWorktreeEnabled()
-            ? getWorktree(sessionId) || "none"
-            : "disabled",
-        },
-      );
+      log.info(LOG.INJECT, `Registered session and injected Pocket Universe system prompt`, {
+        sessionId,
+        alias: getAlias(sessionId),
+        worktree: isWorktreeEnabled() ? getWorktree(sessionId) || 'none' : 'disabled',
+      });
     },
 
     // Inject ONE bundled inbox message at the END of the chain
     // Only for child sessions (those with parentID)
-    "experimental.chat.messages.transform": async (
+    'experimental.chat.messages.transform': async (
       _input: unknown,
       output: MessagesTransformOutput,
     ) => {
-      const lastUserMsg = [...output.messages]
-        .reverse()
-        .find((m) => m.info.role === "user");
+      const lastUserMsg = [...output.messages].reverse().find((m) => m.info.role === 'user');
       if (!lastUserMsg) {
         log.debug(
           LOG.INJECT,
@@ -636,36 +599,28 @@ export function createHooks(client: OpenCodeSessionClient) {
         // Remove from map before injecting to prevent double-injection
         pendingSubagentOutputs.delete(sessionId);
 
-        log.info(
-          LOG.INJECT,
-          `Injecting pending subagent output into last user message`,
-          {
-            sessionId,
-            senderAlias: pendingOutput.senderAlias,
-            outputLength: pendingOutput.output.length,
-          },
-        );
+        log.info(LOG.INJECT, `Injecting pending subagent output into last user message`, {
+          sessionId,
+          senderAlias: pendingOutput.senderAlias,
+          outputLength: pendingOutput.output.length,
+        });
 
         const now = Date.now();
         const pendingPart = {
           id: `prt_sub_out_${now}`,
           sessionID: sessionId,
           messageID: lastUserMsg.info.id,
-          type: "text" as const,
+          type: 'text' as const,
           text: pendingOutput.output,
           synthetic: true,
         };
 
         lastUserMsg.parts.push(pendingPart);
 
-        log.info(
-          LOG.INJECT,
-          `Injected subagent output into last user message`,
-          {
-            sessionId,
-            senderAlias: pendingOutput.senderAlias,
-          },
-        );
+        log.info(LOG.INJECT, `Injected subagent output into last user message`, {
+          sessionId,
+          senderAlias: pendingOutput.senderAlias,
+        });
       }
 
       // Check for pending subagents that need to be injected into this session
@@ -684,11 +639,7 @@ export function createHooks(client: OpenCodeSessionClient) {
 
         // Inject synthetic task tool results for each subagent
         for (const subagent of uninjectedSubagents) {
-          const taskMsg = createSubagentTaskMessage(
-            sessionId,
-            subagent,
-            lastUserMsg,
-          );
+          const taskMsg = createSubagentTaskMessage(sessionId, subagent, lastUserMsg);
           output.messages.push(taskMsg as unknown as UserMessage);
           subagent.injected = true;
 
@@ -711,30 +662,19 @@ export function createHooks(client: OpenCodeSessionClient) {
         // The cover message is ephemeral (not persisted) but provides visual feedback
         // and ensures proper message ordering for all providers.
         if (summaryInjectedSessions.has(sessionId)) {
-          const coverMsg = createSummaryCoverMessage(
-            sessionId,
-            output.messages,
-          );
+          const coverMsg = createSummaryCoverMessage(sessionId, output.messages);
           if (coverMsg) {
             output.messages.push(coverMsg as unknown as UserMessage);
-            log.info(
-              LOG.INJECT,
-              `Injected cover tool for main session summary`,
-              {
-                sessionId,
-              },
-            );
+            log.info(LOG.INJECT, `Injected cover tool for main session summary`, {
+              sessionId,
+            });
           }
         }
 
-        log.debug(
-          LOG.INJECT,
-          `Skipping Pocket Universe inbox for main session`,
-          {
-            sessionId,
-            injectedSubagents: uninjectedSubagents.length,
-          },
-        );
+        log.debug(LOG.INJECT, `Skipping Pocket Universe inbox for main session`, {
+          sessionId,
+          injectedSubagents: uninjectedSubagents.length,
+        });
         return;
       }
 
@@ -760,9 +700,7 @@ export function createHooks(client: OpenCodeSessionClient) {
         agentCount: parallelAgents.length,
         agents: parallelAgents.map((agent: { alias: string }) => agent.alias),
         messageCount: unhandled.length,
-        messageIds: unhandled.map(
-          (message: { msgIndex: number }) => message.msgIndex,
-        ),
+        messageIds: unhandled.map((message: { msgIndex: number }) => message.msgIndex),
       });
 
       // Create ONE bundled message with all pending messages

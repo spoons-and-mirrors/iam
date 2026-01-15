@@ -1,11 +1,7 @@
-import { log, LOG } from "../logger";
-import type { OpenCodeSessionClient, ConfigTransformOutput } from "../types";
-import {
-  createBroadcastTool,
-  createSubagentTool,
-  createRecallTool,
-} from "../tools/index";
-import { isSubagentEnabled, isRecallEnabled } from "../config";
+import { log, LOG } from '../logger';
+import type { OpenCodeSessionClient, ConfigTransformOutput } from '../types';
+import { createBroadcastTool, createSubagentTool, createRecallTool } from '../tools/index';
+import { isSubagentEnabled, isRecallEnabled } from '../config';
 
 export function createRegistry(client: OpenCodeSessionClient) {
   return {
@@ -18,16 +14,13 @@ export function createRegistry(client: OpenCodeSessionClient) {
     },
 
     // Add broadcast, recall, and subagent to subagent_tools (based on config)
-    "experimental.config.transform": async (
-      _input: unknown,
-      output: ConfigTransformOutput,
-    ) => {
+    'experimental.config.transform': async (_input: unknown, output: ConfigTransformOutput) => {
       const experimental = output.experimental ?? {};
       const existingSubagentTools = experimental.subagent_tools ?? [];
       const toolsToAdd = [
-        "broadcast",
-        ...(isRecallEnabled() ? ["recall"] : []),
-        ...(isSubagentEnabled() ? ["subagent"] : []),
+        'broadcast',
+        ...(isRecallEnabled() ? ['recall'] : []),
+        ...(isSubagentEnabled() ? ['subagent'] : []),
       ];
       output.experimental = {
         ...experimental,

@@ -2,8 +2,8 @@
 // Core messaging functions
 // =============================================================================
 
-import type { Message, ParallelAgent, HandledMessage } from "../types";
-import { log, LOG } from "../logger";
+import type { Message, ParallelAgent, HandledMessage } from '../types';
+import { log, LOG } from '../logger';
 import {
   sessionToAlias,
   aliasToSession,
@@ -14,8 +14,8 @@ import {
   getInbox,
   MAX_INBOX_SIZE,
   getWorktree,
-} from "../state";
-import { isWorktreeEnabled } from "../config";
+} from '../state';
+import { isWorktreeEnabled } from '../config';
 
 export function sendMessage(from: string, to: string, body: string): Message {
   const message: Message = {
@@ -73,10 +73,7 @@ export function getMessagesNeedingResume(sessionId: string): Message[] {
   return unhandled.filter((m) => !presented.has(m.msgIndex));
 }
 
-export function markMessagesAsHandled(
-  sessionId: string,
-  msgIndices: number[],
-): HandledMessage[] {
+export function markMessagesAsHandled(sessionId: string, msgIndices: number[]): HandledMessage[] {
   const queue = getInbox(sessionId);
   const handled: HandledMessage[] = [];
   for (const msg of queue) {
@@ -97,10 +94,7 @@ export function markMessagesAsHandled(
   return handled;
 }
 
-export function markMessagesAsPresented(
-  sessionId: string,
-  msgIndices: number[],
-): void {
+export function markMessagesAsPresented(sessionId: string, msgIndices: number[]): void {
   let presented = presentedMessages.get(sessionId);
   if (!presented) {
     presented = new Set();

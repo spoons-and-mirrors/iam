@@ -2,9 +2,9 @@
 // Configuration for the Pocket Universe plugin
 // =============================================================================
 
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 // ============================================================================
 // Types
@@ -56,13 +56,8 @@ const DEFAULT_CONFIG: PocketUniverseConfig = {
 // ============================================================================
 
 // Config file locations (checked in order, first found wins)
-const LOCAL_CONFIG_PATH = path.join(process.cwd(), ".pocket-universe.jsonc");
-const GLOBAL_CONFIG_PATH = path.join(
-  os.homedir(),
-  ".config",
-  "opencode",
-  "pocket-universe.jsonc",
-);
+const LOCAL_CONFIG_PATH = path.join(process.cwd(), '.pocket-universe.jsonc');
+const GLOBAL_CONFIG_PATH = path.join(os.homedir(), '.config', 'opencode', 'pocket-universe.jsonc');
 
 let loadedConfig: PocketUniverseConfig = DEFAULT_CONFIG;
 let configLoaded = false;
@@ -73,9 +68,9 @@ let activeConfigPath: string | null = null;
  */
 function stripJsonComments(content: string): string {
   // Remove single-line comments (// ...)
-  let result = content.replace(/\/\/.*$/gm, "");
+  let result = content.replace(/\/\/.*$/gm, '');
   // Remove multi-line comments (/* ... */)
-  result = result.replace(/\/\*[\s\S]*?\*\//g, "");
+  result = result.replace(/\/\*[\s\S]*?\*\//g, '');
   return result;
 }
 
@@ -141,7 +136,7 @@ function loadConfig(): PocketUniverseConfig {
   }
 
   try {
-    const content = fs.readFileSync(configPath, "utf-8");
+    const content = fs.readFileSync(configPath, 'utf-8');
     const jsonContent = stripJsonComments(content);
     const parsed = JSON.parse(jsonContent);
 
@@ -162,7 +157,7 @@ function loadConfig(): PocketUniverseConfig {
   // This runs after configLoaded=true so isLoggingEnabled() works
   if (loadedConfig.logging) {
     // Defer import to avoid circular dependency
-    import("./logger").then(({ log, LOG }) => {
+    import('./logger').then(({ log, LOG }) => {
       log.info(LOG.HOOK, `Config loaded`, {
         path: activeConfigPath,
         worktree: loadedConfig.worktree,
@@ -170,8 +165,7 @@ function loadConfig(): PocketUniverseConfig {
         recall: loadedConfig.recall,
         logging: loadedConfig.logging,
         max_subagent_depth: loadedConfig.max_subagent_depth,
-        subagent_result_forced_attention:
-          loadedConfig.subagent_result_forced_attention,
+        subagent_result_forced_attention: loadedConfig.subagent_result_forced_attention,
         recall_cross_pocket: loadedConfig.recall_cross_pocket,
       });
     });

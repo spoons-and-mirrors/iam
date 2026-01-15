@@ -1,6 +1,6 @@
-import * as fs from "fs";
-import * as path from "path";
-import { isLoggingEnabled } from "./config";
+import * as fs from 'fs';
+import * as path from 'path';
+import { isLoggingEnabled } from './config';
 
 // =============================================================================
 // Simple file logger for debugging the Pocket Universe plugin
@@ -8,8 +8,8 @@ import { isLoggingEnabled } from "./config";
 // =============================================================================
 
 // Constants
-const LOG_DIR = path.join(process.cwd(), ".logs");
-const LOG_FILE = path.join(LOG_DIR, "pocket-universe.log");
+const LOG_DIR = path.join(process.cwd(), '.logs');
+const LOG_FILE = path.join(LOG_DIR, 'pocket-universe.log');
 const WRITE_INTERVAL_MS = 100; // Batch writes every 100ms
 
 // Async log buffer
@@ -34,7 +34,7 @@ function ensureInitialized(): boolean {
       fs.mkdirSync(LOG_DIR, { recursive: true });
     }
     // Clear log file on each restart
-    fs.writeFileSync(LOG_FILE, "");
+    fs.writeFileSync(LOG_FILE, '');
     initialized = true;
     return true;
   } catch {
@@ -43,7 +43,7 @@ function ensureInitialized(): boolean {
   }
 }
 
-type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
+type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
 function formatTimestamp(): string {
   return new Date().toISOString();
@@ -58,7 +58,7 @@ async function flushLogs(): Promise<void> {
     return;
   }
 
-  const toWrite = logBuffer.join("");
+  const toWrite = logBuffer.join('');
   logBuffer = [];
   writeScheduled = false;
 
@@ -79,19 +79,14 @@ function scheduleFlush(): void {
   }
 }
 
-function writeLog(
-  level: LogLevel,
-  category: string,
-  message: string,
-  data?: unknown,
-): void {
+function writeLog(level: LogLevel, category: string, message: string, data?: unknown): void {
   // Skip all logging if not enabled or can't initialize
   if (!ensureInitialized()) {
     return;
   }
 
   const timestamp = formatTimestamp();
-  const dataStr = data !== undefined ? ` | ${JSON.stringify(data)}` : "";
+  const dataStr = data !== undefined ? ` | ${JSON.stringify(data)}` : '';
   const logLine = `[${timestamp}] [${level}] [${category}] ${message}${dataStr}\n`;
 
   logBuffer.push(logLine);
@@ -100,16 +95,16 @@ function writeLog(
 
 export const log = {
   debug: (category: string, message: string, data?: unknown) =>
-    writeLog("DEBUG", category, message, data),
+    writeLog('DEBUG', category, message, data),
 
   info: (category: string, message: string, data?: unknown) =>
-    writeLog("INFO", category, message, data),
+    writeLog('INFO', category, message, data),
 
   warn: (category: string, message: string, data?: unknown) =>
-    writeLog("WARN", category, message, data),
+    writeLog('WARN', category, message, data),
 
   error: (category: string, message: string, data?: unknown) =>
-    writeLog("ERROR", category, message, data),
+    writeLog('ERROR', category, message, data),
 
   /** Force immediate flush (useful before process exit) */
   flush: flushLogs,
@@ -117,9 +112,9 @@ export const log = {
 
 // Log categories
 export const LOG = {
-  TOOL: "TOOL",
-  MESSAGE: "MESSAGE",
-  SESSION: "SESSION",
-  HOOK: "HOOK",
-  INJECT: "INJECT",
+  TOOL: 'TOOL',
+  MESSAGE: 'MESSAGE',
+  SESSION: 'SESSION',
+  HOOK: 'HOOK',
+  INJECT: 'INJECT',
 } as const;

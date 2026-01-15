@@ -9,13 +9,10 @@ import type {
   SessionState,
   SubagentInfo,
   OpenCodeSessionClient,
-} from "./types";
-import { log, LOG } from "./logger";
-import {
-  RECALL_AGENT_ACTIVE,
-  RECALL_AGENT_IDLE_NO_OUTPUT,
-} from "./prompts/recall.prompts";
-import { isRecallCrossPocket } from "./config";
+} from './types';
+import { log, LOG } from './logger';
+import { RECALL_AGENT_ACTIVE, RECALL_AGENT_IDLE_NO_OUTPUT } from './prompts/recall.prompts';
+import { isRecallCrossPocket } from './config';
 
 // ============================================================================
 // Constants
@@ -30,10 +27,10 @@ export const UNHANDLED_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours for unhandled mes
 export const MAX_INBOX_SIZE = 100; // Max messages per inbox
 export const PARENT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 export const CLEANUP_INTERVAL_MS = 60 * 1000; // Run cleanup every minute
-export const DEFAULT_MODEL_ID = "gpt-4o-2024-08-06";
-export const DEFAULT_PROVIDER_ID = "openai";
+export const DEFAULT_MODEL_ID = 'gpt-4o-2024-08-06';
+export const DEFAULT_PROVIDER_ID = 'openai';
 export const MAX_MESSAGE_LENGTH = 10000; // Prevent excessively long messages
-export const WORKTREES_DIR = ".worktrees"; // Directory for agent worktrees
+export const WORKTREES_DIR = '.worktrees'; // Directory for agent worktrees
 
 // ============================================================================
 // Completed Agent History (persists across pocket universe cleanups)
@@ -43,7 +40,7 @@ export interface CompletedAgentRecord {
   alias: string;
   statusHistory: string[];
   finalOutput: string;
-  state: "completed";
+  state: 'completed';
   completedAt: number;
   /** Main session ID that this agent belonged to (pocket universe identifier) */
   pocketId?: string;
@@ -91,7 +88,7 @@ export function saveAgentToHistory(alias: string, finalOutput: string): void {
     alias,
     statusHistory: [...statusHistory],
     finalOutput,
-    state: "completed",
+    state: 'completed',
     completedAt: Date.now(),
     pocketId: pocketId || undefined,
   };
@@ -118,14 +115,14 @@ export function recallAgents(
   agents: Array<{
     name: string;
     status_history: string[];
-    state: "active" | "idle" | "completed";
+    state: 'active' | 'idle' | 'completed';
     output?: string;
   }>;
 } {
   const results: Array<{
     name: string;
     status_history: string[];
-    state: "active" | "idle" | "completed";
+    state: 'active' | 'idle' | 'completed';
     output?: string;
   }> = [];
 
@@ -144,12 +141,12 @@ export function recallAgents(
     const entry: {
       name: string;
       status_history: string[];
-      state: "active" | "idle" | "completed";
+      state: 'active' | 'idle' | 'completed';
       output?: string;
     } = {
       name: record.alias,
       status_history: record.statusHistory,
-      state: "completed",
+      state: 'completed',
     };
     if (includeOutput) {
       entry.output = record.finalOutput;
@@ -165,12 +162,12 @@ export function recallAgents(
 
     const statusHistory = agentDescriptions.get(alias) || [];
     const sessionState = sessionStates.get(sessionId);
-    const state = sessionState?.status === "idle" ? "idle" : "active";
+    const state = sessionState?.status === 'idle' ? 'idle' : 'active';
 
     const entry: {
       name: string;
       status_history: string[];
-      state: "active" | "idle" | "completed";
+      state: 'active' | 'idle' | 'completed';
       output?: string;
     } = {
       name: alias,
@@ -181,7 +178,7 @@ export function recallAgents(
       const storedOutput = agentFinalOutputs.get(alias);
       if (storedOutput) {
         entry.output = storedOutput;
-      } else if (state === "active") {
+      } else if (state === 'active') {
         entry.output = RECALL_AGENT_ACTIVE;
       } else {
         entry.output = RECALL_AGENT_IDLE_NO_OUTPUT;
@@ -264,10 +261,7 @@ export const cleanedUpSessions = new Set<string>();
 // When subagent completes and we want to inject as user message, we store here
 // session.before_complete picks this up and sets resumePrompt
 // Key: recipient session ID, Value: { senderAlias, output }
-export const pendingSubagentOutputs = new Map<
-  string,
-  { senderAlias: string; output: string }
->();
+export const pendingSubagentOutputs = new Map<string, { senderAlias: string; output: string }>();
 
 // ============================================================================
 // Worktree Tracking (isolated working directories per agent)
@@ -338,10 +332,7 @@ function cleanupExpiredMessages(): void {
         inboxes.set(sessionId, unhandled.slice(0, MAX_INBOX_SIZE));
         totalRemoved += before - MAX_INBOX_SIZE;
       } else {
-        const kept = [
-          ...unhandled,
-          ...handled.slice(0, MAX_INBOX_SIZE - unhandled.length),
-        ];
+        const kept = [...unhandled, ...handled.slice(0, MAX_INBOX_SIZE - unhandled.length)];
         inboxes.set(sessionId, kept);
         totalRemoved += before - kept.length;
       }
@@ -381,8 +372,7 @@ export function getNextAlias(): string {
   nextAgentIndex++;
 
   const letter = String.fromCharCode(CHAR_CODE_A + (index % ALPHABET_SIZE));
-  const suffix =
-    index >= ALPHABET_SIZE ? Math.floor(index / ALPHABET_SIZE).toString() : "";
+  const suffix = index >= ALPHABET_SIZE ? Math.floor(index / ALPHABET_SIZE).toString() : '';
   return `agent${letter}${suffix}`;
 }
 
@@ -422,9 +412,7 @@ export function getDescription(alias: string): string[] | undefined {
 
 export function getLatestStatus(alias: string): string | undefined {
   const history = agentDescriptions.get(alias);
-  return history && history.length > 0
-    ? history[history.length - 1]
-    : undefined;
+  return history && history.length > 0 ? history[history.length - 1] : undefined;
 }
 
 export function resolveAlias(
@@ -433,7 +421,7 @@ export function resolveAlias(
   parentId?: string | null,
 ): string | undefined {
   // Handle special "parent" alias (DORMANT)
-  if (aliasOrSessionId === "parent" && parentId) {
+  if (aliasOrSessionId === 'parent' && parentId) {
     return parentId;
   }
   // Try alias first, then assume it's a session ID

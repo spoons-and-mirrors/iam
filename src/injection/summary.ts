@@ -2,15 +2,15 @@
 // Summary helpers for injection
 // =============================================================================
 
-import type { UserMessage, AssistantMessage } from "../types";
+import type { UserMessage, AssistantMessage } from '../types';
 import {
   POCKET_UNIVERSE_SUMMARY_HEADER,
   POCKET_UNIVERSE_AGENTS_INTRO,
   WORKTREE_MERGE_NOTE,
   WORKTREE_SUMMARY_HEADER,
   WORKTREE_SUMMARY_NOTE,
-} from "../prompts/injection";
-import { log, LOG } from "../logger";
+} from '../prompts/injection';
+import { log, LOG } from '../logger';
 import {
   sessionWorktrees,
   sessionToAlias,
@@ -19,8 +19,8 @@ import {
   cleanupCompletedAgents,
   DEFAULT_MODEL_ID,
   DEFAULT_PROVIDER_ID,
-} from "../state";
-import { isWorktreeEnabled } from "../config";
+} from '../state';
+import { isWorktreeEnabled } from '../config';
 
 /**
  * Create a synthetic tool message containing the Pocket Universe Summary.
@@ -46,7 +46,7 @@ export function createSummaryCoverMessage(
   // Find the last user message to extract info
   const lastUserMsg = [...messages]
     .reverse()
-    .find((m) => (m as { info?: { role?: string } }).info?.role === "user") as
+    .find((m) => (m as { info?: { role?: string } }).info?.role === 'user') as
     | {
         info: {
           id: string;
@@ -67,13 +67,13 @@ export function createSummaryCoverMessage(
     info: {
       id: syntheticId,
       sessionID: sessionId,
-      role: "assistant",
-      agent: lastUserMsg.info.agent || "code",
+      role: 'assistant',
+      agent: lastUserMsg.info.agent || 'code',
       parentID: lastUserMsg.info.id,
       modelID: lastUserMsg.info.model?.modelID || DEFAULT_MODEL_ID,
       providerID: lastUserMsg.info.model?.providerID || DEFAULT_PROVIDER_ID,
-      mode: "default",
-      path: { cwd: "/", root: "/" },
+      mode: 'default',
+      path: { cwd: '/', root: '/' },
       time: { created: now, completed: now },
       cost: 0,
       tokens: {
@@ -88,14 +88,14 @@ export function createSummaryCoverMessage(
         id: `${syntheticId}-p`,
         sessionID: sessionId,
         messageID: syntheticId,
-        type: "tool",
+        type: 'tool',
         callID: `${syntheticId}-c`,
-        tool: "pocket_universe",
+        tool: 'pocket_universe',
         state: {
-          status: "completed",
+          status: 'completed',
           input: { synthetic: true },
           output: summary,
-          title: "Pocket Universe Summary",
+          title: 'Pocket Universe Summary',
           metadata: {},
           time: { start: now, end: now },
         },
@@ -153,7 +153,7 @@ export function createWorktreeSummaryMessage(
     summary: WORKTREE_SUMMARY_HEADER,
     worktrees: worktreeInfo.map((w) => ({
       agent: w.alias,
-      task: w.description || "unknown",
+      task: w.description || 'unknown',
       path: w.worktree,
     })),
     note: WORKTREE_SUMMARY_NOTE,
@@ -171,13 +171,13 @@ export function createWorktreeSummaryMessage(
     info: {
       id: assistantMessageId,
       sessionID: sessionId,
-      role: "assistant",
-      agent: userInfo.agent || "code",
+      role: 'assistant',
+      agent: userInfo.agent || 'code',
       parentID: userInfo.id,
       modelID: userInfo.model?.modelID || DEFAULT_MODEL_ID,
       providerID: userInfo.model?.providerID || DEFAULT_PROVIDER_ID,
-      mode: "default",
-      path: { cwd: "/", root: "/" },
+      mode: 'default',
+      path: { cwd: '/', root: '/' },
       time: { created: now, completed: now },
       cost: 0,
       tokens: {
@@ -192,11 +192,11 @@ export function createWorktreeSummaryMessage(
         id: partId,
         sessionID: sessionId,
         messageID: assistantMessageId,
-        type: "tool",
+        type: 'tool',
         callID: callId,
-        tool: "pocket_universe_worktrees",
+        tool: 'pocket_universe_worktrees',
         state: {
-          status: "completed",
+          status: 'completed',
           input: { synthetic: true },
           output,
           title: `${worktreeInfo.length} agent worktree(s)`,
@@ -237,9 +237,7 @@ export function generatePocketUniverseSummary(): string | null {
 
   for (const [sessionId, alias] of sessionToAlias.entries()) {
     const statuses = agentDescriptions.get(alias) || [];
-    const worktree = isWorktreeEnabled()
-      ? sessionWorktrees.get(sessionId)
-      : undefined;
+    const worktree = isWorktreeEnabled() ? sessionWorktrees.get(sessionId) : undefined;
 
     agents.push({ alias, statuses, worktree });
   }
@@ -252,9 +250,9 @@ export function generatePocketUniverseSummary(): string | null {
   // Build the summary
   const lines: string[] = [];
   lines.push(POCKET_UNIVERSE_SUMMARY_HEADER);
-  lines.push("");
+  lines.push('');
   lines.push(POCKET_UNIVERSE_AGENTS_INTRO);
-  lines.push("");
+  lines.push('');
 
   for (const agent of agents) {
     lines.push(`## ${agent.alias}`);
@@ -267,14 +265,14 @@ export function generatePocketUniverseSummary(): string | null {
         lines.push(`  → ${status}`);
       }
     }
-    lines.push("");
+    lines.push('');
   }
 
   if (isWorktreeEnabled()) {
     lines.push(WORKTREE_MERGE_NOTE);
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 /**
@@ -282,9 +280,7 @@ export function generatePocketUniverseSummary(): string | null {
  * Uses noReply: true to prevent AI loop, and synthetic: true to hide from TUI.
  * The message is persisted to the database but not visible to the user.
  */
-export async function injectPocketUniverseSummaryToMain(
-  mainSessionId: string,
-): Promise<boolean> {
+export async function injectPocketUniverseSummaryToMain(mainSessionId: string): Promise<boolean> {
   const storedClient = getStoredClient();
   if (!storedClient) {
     log.warn(LOG.SESSION, `Cannot inject summary - no client available`);
@@ -293,10 +289,7 @@ export async function injectPocketUniverseSummaryToMain(
 
   const summary = generatePocketUniverseSummary();
   if (!summary) {
-    log.info(
-      LOG.SESSION,
-      `No agents to summarize, skipping pocket universe summary`,
-    );
+    log.info(LOG.SESSION, `No agents to summarize, skipping pocket universe summary`);
     return false;
   }
 
@@ -314,7 +307,7 @@ export async function injectPocketUniverseSummaryToMain(
       path: { id: mainSessionId },
       body: {
         noReply: true,
-        parts: [{ type: "text", text: summary, synthetic: true }],
+        parts: [{ type: 'text', text: summary, synthetic: true }],
       } as unknown as { parts: Array<{ type: string; text: string }> },
     });
 

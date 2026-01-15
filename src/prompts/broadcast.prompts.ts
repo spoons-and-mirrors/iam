@@ -1,5 +1,5 @@
-import type { ParallelAgent } from "../types";
-import type { HandledMessage } from "../types";
+import type { ParallelAgent } from '../types';
+import type { HandledMessage } from '../types';
 
 export const BROADCAST_DESCRIPTION = `Communicate with other parallel agents. Use 'send_to' for a specific agent, or omit to message all. Use 'reply_to' to reply (auto-wires recipient to sender).`;
 
@@ -13,7 +13,7 @@ export function broadcastResult(
 
   // Identity first
   lines.push(`You are: ${alias}`);
-  lines.push("");
+  lines.push('');
 
   // AGENTS LIST AT THE TOP - most important info
   if (parallelAgents.length > 0) {
@@ -39,32 +39,25 @@ export function broadcastResult(
   // Combined reply confirmation (when using reply_to)
   // Include FULL source message for audit trail
   if (handledMessage) {
-    lines.push("");
+    lines.push('');
     lines.push(`Replied to #${handledMessage.id} from ${handledMessage.from}:`);
     lines.push(`  "${handledMessage.body}"`);
   } else if (recipients.length > 0) {
     // Regular message (no reply_to)
-    lines.push("");
-    const recipientStr =
-      recipients.length === 1 ? recipients[0] : recipients.join(", ");
+    lines.push('');
+    const recipientStr = recipients.length === 1 ? recipients[0] : recipients.join(', ');
     lines.push(`Message sent to: ${recipientStr}`);
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 export const BROADCAST_MISSING_MESSAGE = `Error: 'message' parameter is required.`;
 
 export const BROADCAST_SELF_MESSAGE = `Warning: You cannot send a message to yourself. The target alias is your own alias. Choose a different recipient.`;
 
-export function broadcastUnknownRecipient(
-  recipient: string,
-  known: string[],
-): string {
-  const list =
-    known.length > 0
-      ? `Known agents: ${known.join(", ")}`
-      : "No agents available yet.";
+export function broadcastUnknownRecipient(recipient: string, known: string[]): string {
+  const list = known.length > 0 ? `Known agents: ${known.join(', ')}` : 'No agents available yet.';
   return `Error: Unknown recipient "${recipient}". ${list}`;
 }
 

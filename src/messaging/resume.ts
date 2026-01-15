@@ -2,16 +2,11 @@
 // Resume and output piping functions
 // =============================================================================
 
-import { resumeBroadcastPrompt } from "../prompts/broadcast.prompts";
-import { formatSubagentOutput } from "../prompts/subagent.prompts";
-import { log, LOG } from "../logger";
-import {
-  sessionToAlias,
-  sessionStates,
-  getStoredClient,
-  pendingSubagentOutputs,
-} from "../state";
-import { getMessagesNeedingResume, markMessagesAsPresented } from "./core";
+import { resumeBroadcastPrompt } from '../prompts/broadcast.prompts';
+import { formatSubagentOutput } from '../prompts/subagent.prompts';
+import { log, LOG } from '../logger';
+import { sessionToAlias, sessionStates, getStoredClient, pendingSubagentOutputs } from '../state';
+import { getMessagesNeedingResume, markMessagesAsPresented } from './core';
 
 /**
  * Resume an idle session by sending a broadcast message as a user prompt.
@@ -28,7 +23,7 @@ export async function resumeSessionWithBroadcast(
     return false;
   }
 
-  const recipientAlias = sessionToAlias.get(recipientSessionId) || "unknown";
+  const recipientAlias = sessionToAlias.get(recipientSessionId) || 'unknown';
 
   log.info(LOG.MESSAGE, `Resuming idle session with broadcast`, {
     recipientSessionId,
@@ -45,7 +40,7 @@ export async function resumeSessionWithBroadcast(
     // Mark session as active before resuming
     const state = sessionStates.get(recipientSessionId);
     if (state) {
-      state.status = "active";
+      state.status = 'active';
       state.lastActivity = Date.now();
     }
 
@@ -62,14 +57,14 @@ export async function resumeSessionWithBroadcast(
         await storedClient.session.prompt({
           path: { id: recipientSessionId },
           body: {
-            parts: [{ type: "text", text: resumePrompt }],
+            parts: [{ type: 'text', text: resumePrompt }],
           },
         });
 
         // Mark session as idle after prompt completes
         const stateAfter = sessionStates.get(recipientSessionId);
         if (stateAfter) {
-          stateAfter.status = "idle";
+          stateAfter.status = 'idle';
           stateAfter.lastActivity = Date.now();
         }
 
@@ -81,15 +76,11 @@ export async function resumeSessionWithBroadcast(
         // Check for messages that need resumption (unhandled AND not presented)
         const unreadMessages = getMessagesNeedingResume(recipientSessionId);
         if (unreadMessages.length > 0) {
-          log.info(
-            LOG.MESSAGE,
-            `Resumed session has new unread messages, resuming again`,
-            {
-              recipientSessionId,
-              recipientAlias,
-              unreadCount: unreadMessages.length,
-            },
-          );
+          log.info(LOG.MESSAGE, `Resumed session has new unread messages, resuming again`, {
+            recipientSessionId,
+            recipientAlias,
+            unreadCount: unreadMessages.length,
+          });
 
           // Resume with the first unread message
           const firstUnread = unreadMessages[0];
@@ -98,11 +89,7 @@ export async function resumeSessionWithBroadcast(
           // Mark this message as presented BEFORE resuming to avoid infinite loop
           markMessagesAsPresented(recipientSessionId, [firstUnread.msgIndex]);
 
-          await resumeSessionWithBroadcast(
-            recipientSessionId,
-            senderAlias,
-            firstUnread.body,
-          );
+          await resumeSessionWithBroadcast(recipientSessionId, senderAlias, firstUnread.body);
         }
       } catch (e) {
         log.error(LOG.MESSAGE, `Resumed session failed`, {
@@ -112,7 +99,7 @@ export async function resumeSessionWithBroadcast(
         // Mark as idle on error too
         const stateErr = sessionStates.get(recipientSessionId);
         if (stateErr) {
-          stateErr.status = "idle";
+          stateErr.status = 'idle';
         }
       }
     })();
@@ -138,7 +125,7 @@ export async function resumeWithSubagentOutput(
   senderAlias: string,
   subagentOutput: string,
 ): Promise<boolean> {
-  const recipientAlias = sessionToAlias.get(recipientSessionId) || "unknown";
+  const recipientAlias = sessionToAlias.get(recipientSessionId) || 'unknown';
 
   // Format the output message
   const formattedOutput = formatSubagentOutput(senderAlias, subagentOutput);
@@ -150,22 +137,18 @@ export async function resumeWithSubagentOutput(
         path: { id: recipientSessionId },
         body: {
           noReply: true,
-          parts: [{ type: "text", text: formattedOutput }],
+          parts: [{ type: 'text', text: formattedOutput }],
         } as unknown as {
           parts: Array<{ type: string; text: string }>;
           noReply: boolean;
         },
       });
 
-      log.info(
-        LOG.MESSAGE,
-        `Injected subagent output as persisted user message`,
-        {
-          recipientSessionId,
-          recipientAlias,
-          senderAlias,
-        },
-      );
+      log.info(LOG.MESSAGE, `Injected subagent output as persisted user message`, {
+        recipientSessionId,
+        recipientAlias,
+        senderAlias,
+      });
 
       return true;
     } catch (e) {
@@ -182,16 +165,12 @@ export async function resumeWithSubagentOutput(
     }
   }
 
-  log.info(
-    LOG.MESSAGE,
-    `Storing subagent output for resume (no forced attention)`,
-    {
-      recipientSessionId,
-      recipientAlias,
-      senderAlias,
-      outputLength: subagentOutput.length,
-    },
-  );
+  log.info(LOG.MESSAGE, `Storing subagent output for resume (no forced attention)`, {
+    recipientSessionId,
+    recipientAlias,
+    senderAlias,
+    outputLength: subagentOutput.length,
+  });
 
   // Store for session.before_complete to pick up
   pendingSubagentOutputs.set(recipientSessionId, {

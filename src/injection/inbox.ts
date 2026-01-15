@@ -2,15 +2,10 @@
 // Inbox message creation for child sessions
 // =============================================================================
 
-import type {
-  Message,
-  UserMessage,
-  AssistantMessage,
-  ParallelAgent,
-} from "../types";
-import { ANNOUNCE_HINT } from "../prompts/injection";
-import { log, LOG } from "../logger";
-import { DEFAULT_MODEL_ID, DEFAULT_PROVIDER_ID } from "../state";
+import type { Message, UserMessage, AssistantMessage, ParallelAgent } from '../types';
+import { ANNOUNCE_HINT } from '../prompts/injection';
+import { log, LOG } from '../logger';
+import { DEFAULT_MODEL_ID, DEFAULT_PROVIDER_ID } from '../state';
 
 /**
  * Create a synthetic broadcast message showing inbox and agent status.
@@ -74,7 +69,7 @@ export function createInboxMessage(
   if (messages.length > 0) {
     titleParts.push(`${messages.length} message(s)`);
   }
-  const title = titleParts.length > 0 ? titleParts.join(", ") : "Inbox";
+  const title = titleParts.length > 0 ? titleParts.join(', ') : 'Inbox';
 
   // Output is the structured data the LLM sees
   const output = JSON.stringify(outputData);
@@ -82,9 +77,7 @@ export function createInboxMessage(
   log.info(LOG.MESSAGE, `Creating inbox injection`, {
     sessionId,
     agents: parallelAgents.map((a) => a.alias),
-    agentStatuses: parallelAgents.map((a) =>
-      a.description?.slice(-2).join(", "),
-    ),
+    agentStatuses: parallelAgents.map((a) => a.description?.slice(-2).join(', ')),
     messageIds: messages.map((m) => m.msgIndex),
     messageFroms: messages.map((m) => m.from),
   });
@@ -93,13 +86,13 @@ export function createInboxMessage(
     info: {
       id: assistantMessageId,
       sessionID: sessionId,
-      role: "assistant",
-      agent: userInfo.agent || "code",
+      role: 'assistant',
+      agent: userInfo.agent || 'code',
       parentID: userInfo.id,
       modelID: userInfo.model?.modelID || DEFAULT_MODEL_ID,
       providerID: userInfo.model?.providerID || DEFAULT_PROVIDER_ID,
-      mode: "default",
-      path: { cwd: "/", root: "/" },
+      mode: 'default',
+      path: { cwd: '/', root: '/' },
       time: { created: now, completed: now },
       cost: 0,
       tokens: {
@@ -114,11 +107,11 @@ export function createInboxMessage(
         id: partId,
         sessionID: sessionId,
         messageID: assistantMessageId,
-        type: "tool",
+        type: 'tool',
         callID: callId,
-        tool: "broadcast",
+        tool: 'broadcast',
         state: {
-          status: "completed",
+          status: 'completed',
           input: { synthetic: true }, // Hints this was injected by Pocket Universe, not a real agent call
           output,
           title,

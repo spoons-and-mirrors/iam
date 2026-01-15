@@ -2,12 +2,12 @@
 // Git worktree management for isolated agent working directories
 // =============================================================================
 
-import { exec } from "child_process";
-import { promisify } from "util";
-import * as path from "path";
-import * as fs from "fs";
-import { log, LOG } from "./logger";
-import { WORKTREES_DIR } from "./state";
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import * as path from 'path';
+import * as fs from 'fs';
+import { log, LOG } from './logger';
+import { WORKTREES_DIR } from './state';
 
 const execAsync = promisify(exec);
 
@@ -16,7 +16,7 @@ const execAsync = promisify(exec);
  */
 export async function isGitRepo(cwd: string): Promise<boolean> {
   try {
-    await execAsync("git rev-parse --git-dir", { cwd });
+    await execAsync('git rev-parse --git-dir', { cwd });
     return true;
   } catch {
     return false;
@@ -28,7 +28,7 @@ export async function isGitRepo(cwd: string): Promise<boolean> {
  */
 export async function getGitRoot(cwd: string): Promise<string | null> {
   try {
-    const { stdout } = await execAsync("git rev-parse --show-toplevel", {
+    const { stdout } = await execAsync('git rev-parse --show-toplevel', {
       cwd,
     });
     return stdout.trim();
@@ -42,10 +42,7 @@ export async function getGitRoot(cwd: string): Promise<string | null> {
  * Creates a detached worktree from HEAD (clean state, last commit).
  * Returns the absolute path to the worktree, or null if not in a git repo.
  */
-export async function createAgentWorktree(
-  alias: string,
-  cwd: string,
-): Promise<string | null> {
+export async function createAgentWorktree(alias: string, cwd: string): Promise<string | null> {
   const gitRoot = await getGitRoot(cwd);
   if (!gitRoot) {
     log.warn(LOG.TOOL, `Cannot create worktree - not in a git repo`, { cwd });

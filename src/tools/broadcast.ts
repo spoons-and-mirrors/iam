@@ -2,7 +2,7 @@
 // Broadcast tool definition
 // =============================================================================
 
-import { tool } from "@opencode-ai/plugin";
+import { tool } from '@opencode-ai/plugin';
 import {
   BROADCAST_DESCRIPTION,
   BROADCAST_MISSING_MESSAGE,
@@ -10,14 +10,9 @@ import {
   broadcastUnknownRecipient,
   broadcastResult,
   parentNotifyMessage,
-} from "../prompts/broadcast.prompts";
-import { log, LOG } from "../logger";
-import type {
-  OpenCodeSessionClient,
-  ToolContext,
-  InternalClient,
-  HandledMessage,
-} from "../types";
+} from '../prompts/broadcast.prompts';
+import { log, LOG } from '../logger';
+import type { OpenCodeSessionClient, ToolContext, InternalClient, HandledMessage } from '../types';
 import {
   sessionStates,
   announcedSessions,
@@ -26,15 +21,15 @@ import {
   resolveAlias,
   registerSession,
   MAX_MESSAGE_LENGTH,
-} from "../state";
+} from '../state';
 import {
   sendMessage,
   resumeSessionWithBroadcast,
   markMessagesAsHandled,
   getKnownAliases,
   getParallelAgents,
-} from "../messaging";
-import { getParentId } from "../injection/index";
+} from '../messaging';
+import { getParentId } from '../injection/index';
 export function createBroadcastTool(client: OpenCodeSessionClient) {
   return tool({
     description: BROADCAST_DESCRIPTION,
@@ -42,12 +37,9 @@ export function createBroadcastTool(client: OpenCodeSessionClient) {
       send_to: tool.schema
         .string()
         .optional()
-        .describe("Target agent (single agent only). Omit to send to all."),
-      message: tool.schema.string().describe("Your message"),
-      reply_to: tool.schema
-        .number()
-        .optional()
-        .describe("Message ID to mark as handled"),
+        .describe('Target agent (single agent only). Omit to send to all.'),
+      message: tool.schema.string().describe('Your message'),
+      reply_to: tool.schema.number().optional().describe('Message ID to mark as handled'),
     },
     async execute(args, context: ToolContext) {
       const sessionId = context.sessionID;
@@ -73,8 +65,7 @@ export function createBroadcastTool(client: OpenCodeSessionClient) {
           originalLength: messageContent.length,
           truncatedTo: MAX_MESSAGE_LENGTH,
         });
-        messageContent =
-          messageContent.substring(0, MAX_MESSAGE_LENGTH) + "... [truncated]";
+        messageContent = messageContent.substring(0, MAX_MESSAGE_LENGTH) + '... [truncated]';
       }
 
       // Get parallel agents info early (needed for first call)
@@ -189,8 +180,7 @@ export function createBroadcastTool(client: OpenCodeSessionClient) {
 
       // DORMANT: parent alias feature
       // Check if we're broadcasting to parent
-      const isTargetingParent =
-        parentId && recipientSessions.includes(parentId);
+      const isTargetingParent = parentId && recipientSessions.includes(parentId);
 
       // Send messages to all recipients
       // Check if recipient is idle and resume if so
@@ -218,7 +208,7 @@ export function createBroadcastTool(client: OpenCodeSessionClient) {
         sendMessage(alias, recipientSessionId, messageContent);
 
         // If recipient is idle, also resume the session
-        if (recipientState?.status === "idle") {
+        if (recipientState?.status === 'idle') {
           const resumed = await resumeSessionWithBroadcast(
             recipientSessionId,
             alias,
@@ -239,15 +229,12 @@ export function createBroadcastTool(client: OpenCodeSessionClient) {
 
       // Notify parent session if targeted (DORMANT)
       if (isTargetingParent) {
-        log.info(
-          LOG.MESSAGE,
-          `Broadcasting to parent session, calling notify_once`,
-          { sessionId, parentId },
-        );
+        log.info(LOG.MESSAGE, `Broadcasting to parent session, calling notify_once`, {
+          sessionId,
+          parentId,
+        });
         try {
-          const internalClient = (
-            client as unknown as { _client?: InternalClient }
-          )._client;
+          const internalClient = (client as unknown as { _client?: InternalClient })._client;
           if (internalClient?.post) {
             await internalClient.post({
               url: `/session/${parentId}/notify_once`,
@@ -267,12 +254,7 @@ export function createBroadcastTool(client: OpenCodeSessionClient) {
         }
       }
 
-      return broadcastResult(
-        alias,
-        validTargets,
-        parallelAgents,
-        handledMessage,
-      );
+      return broadcastResult(alias, validTargets, parallelAgents, handledMessage);
     },
   });
 }

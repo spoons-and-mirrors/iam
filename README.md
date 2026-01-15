@@ -1,21 +1,21 @@
 # Pocket Universe
 
-## Async agents within a main thread block
+## An agentic closed loop with async capabilities
 
-Async agents are powerful but can lead to work getting orphaned and a bunch of your time and tokens... wasted. You fire, it forgets. Orchestration of such workflow is at best finicky.
+Async agents can be powerful, but orchestration is at best finicky; they fire and _forget_, orphan work, lose context, waste time... and tokens. This opencode plugin extends the native subagent paradigm to provide reliable closed loop async agents, blocking main thread execution, a _"pocket universe"_.
 
-**Pocket Universe fixes this.**
+### Tools
 
-- **Fire-and-forget with callback** — Subagents run in parallel, but their output is always piped back to the caller
-- **No wasted tokens** — Every model output is captured and delivered, guaranteed
-- **Automatic resumption** — Idle agents wake up when messages arrive
-- **Complete orchestration** — Main session waits for ALL work to finish before continuing
-- **Persistent history** — Agents can recall what previous agents accomplished via the `recall` tool
-- **Isolated worktrees** — Each agent works in its own git worktree, no conflicts
+- `broadcast` is the messaging system. Subagents can send or reply to others and update their status
+- `subagent` creates a sibling subagent (async). The caller receives the output mid-stream (or resumes if idle)
+- `recall` allows access to subagents' status history, can also return subagent output
 
-Within a single main session call, an entire universe of parallel work can unfold — agents spawning agents, communicating, coordinating — and the main session observes it all complete before moving on. No orphaned work. No lost context. No wasted compute. No guarantee this actually helps anything, but it's worth trying.
+### Key Features
 
-If you want background agents, open a new opencode session. If you want async subagents with proper callback management within a main thread block, use this.
+- **blocking** main session until the _pocket universe_ completes
+- **resume** idle agents upon receiving a `broadcast` or `subagent` result
+- **depth** control to limit runaway subagent spawning
+- **worktree** support for isolated agent workspaces (optional)
 
 ---
 

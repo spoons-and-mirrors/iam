@@ -1,16 +1,16 @@
-import type { Plugin } from "@opencode-ai/plugin";
-import { log, LOG } from "./logger";
-import type { OpenCodeSessionClient } from "./types";
-import { setStoredClient } from "./state";
-import { createHooks } from "./plugin/hooks";
-import { createRegistry } from "./plugin/registry";
+import type { Plugin } from '@opencode-ai/plugin';
+import { log, LOG } from './logger';
+import type { OpenCodeSessionClient } from './types';
+import { setStoredClient } from './state';
+import { createHooks } from './plugin/hooks';
+import { createRegistry } from './plugin/registry';
 
 // ============================================================================
 // Plugin
 // ============================================================================
 
 const plugin: Plugin = async (ctx) => {
-  log.info(LOG.HOOK, "Plugin initialized");
+  log.info(LOG.HOOK, 'Plugin initialized');
   const client = ctx.client as unknown as OpenCodeSessionClient;
 
   // Store client for resumption calls

@@ -2,15 +2,11 @@
 // Recall tool definition
 // =============================================================================
 
-import { tool } from "@opencode-ai/plugin";
-import {
-  RECALL_DESCRIPTION,
-  recallNotFound,
-  RECALL_EMPTY,
-} from "../prompts/recall.prompts";
-import { log, LOG } from "../logger";
-import type { ToolContext } from "../types";
-import { getAlias, recallAgents } from "../state";
+import { tool } from '@opencode-ai/plugin';
+import { RECALL_DESCRIPTION, recallNotFound, RECALL_EMPTY } from '../prompts/recall.prompts';
+import { log, LOG } from '../logger';
+import type { ToolContext } from '../types';
+import { getAlias, recallAgents } from '../state';
 
 export function createRecallTool() {
   return tool({
@@ -19,15 +15,11 @@ export function createRecallTool() {
       agent_name: tool.schema
         .string()
         .optional()
-        .describe(
-          "Specific agent to recall (e.g., 'agentA'). Omit to get all agents.",
-        ),
+        .describe("Specific agent to recall (e.g., 'agentA'). Omit to get all agents."),
       show_output: tool.schema
         .boolean()
         .optional()
-        .describe(
-          "Include the agent's final output. Only works when agent_name is specified.",
-        ),
+        .describe("Include the agent's final output. Only works when agent_name is specified."),
     },
     async execute(args, context: ToolContext) {
       const sessionId = context.sessionID;
@@ -35,7 +27,7 @@ export function createRecallTool() {
 
       log.info(LOG.TOOL, `recall called`, {
         alias,
-        targetAgent: args.agent_name || "all",
+        targetAgent: args.agent_name || 'all',
         showOutput: args.show_output || false,
       });
 

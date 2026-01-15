@@ -2,7 +2,7 @@
 // Subagent tool definition
 // =============================================================================
 
-import { tool } from "@opencode-ai/plugin";
+import { tool } from '@opencode-ai/plugin';
 import {
   SUBAGENT_DESCRIPTION,
   SUBAGENT_NOT_CHILD_SESSION,
@@ -12,13 +12,9 @@ import {
   subagentMaxDepth,
   receivedSubagentOutput,
   subagentError,
-} from "../prompts/subagent.prompts";
-import { log, LOG } from "../logger";
-import type {
-  OpenCodeSessionClient,
-  ToolContext,
-  SubagentInfo,
-} from "../types";
+} from '../prompts/subagent.prompts';
+import { log, LOG } from '../logger';
+import type { OpenCodeSessionClient, ToolContext, SubagentInfo } from '../types';
 import {
   sessionToAlias,
   sessionStates,
@@ -29,27 +25,23 @@ import {
   setWorktree,
   getWorktree,
   saveAgentToHistory,
-} from "../state";
+} from '../state';
 import {
   sendMessage,
   resumeSessionWithBroadcast,
   resumeWithSubagentOutput,
   getMessagesNeedingResume,
   markMessagesAsPresented,
-} from "../messaging";
+} from '../messaging';
 import {
   getParentId,
   getSessionDepth,
   injectTaskPartToParent,
   fetchSubagentOutput,
   markSubagentCompleted,
-} from "../injection/index";
-import { createAgentWorktree } from "../worktree";
-import {
-  getMaxSubagentDepth,
-  isWorktreeEnabled,
-  isSubagentResultForcedAttention,
-} from "../config";
+} from '../injection/index';
+import { createAgentWorktree } from '../worktree';
+import { getMaxSubagentDepth, isWorktreeEnabled, isSubagentResultForcedAttention } from '../config';
 
 // ============================================================================
 // Helper: Get caller's agent and model info from their session messages
@@ -82,7 +74,7 @@ async function getCallerModelInfo(
     // Find the latest assistant message (has agent/model info)
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
-      if (msg.info.role === "assistant") {
+      if (msg.info.role === 'assistant') {
         const info: CallerModelInfo = {};
 
         // Type assertion to access agent/model fields not in minimal interface
@@ -142,13 +134,11 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
   return tool({
     description: SUBAGENT_DESCRIPTION,
     args: {
-      prompt: tool.schema
-        .string()
-        .describe("The task for the new agent to perform"),
+      prompt: tool.schema.string().describe('The task for the new agent to perform'),
       description: tool.schema
         .string()
         .optional()
-        .describe("Short description of the task (3-5 words)"),
+        .describe('Short description of the task (3-5 words)'),
     },
     async execute(args, context: ToolContext) {
       const sessionId = context.sessionID;
@@ -211,10 +201,7 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
 
         // Create isolated worktree for this agent (if enabled and in a git repo)
         if (isWorktreeEnabled()) {
-          const worktreePath = await createAgentWorktree(
-            newAlias,
-            process.cwd(),
-          );
+          const worktreePath = await createAgentWorktree(newAlias, process.cwd());
           if (worktreePath) {
             setWorktree(newSessionId, worktreePath);
           }
@@ -253,11 +240,7 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
         });
 
         // Try to inject immediately into parent's message history
-        const injected = await injectTaskPartToParent(
-          client,
-          parentId,
-          subagentInfo,
-        );
+        const injected = await injectTaskPartToParent(client, parentId, subagentInfo);
 
         if (injected) {
           subagentInfo.injected = true;
@@ -297,7 +280,7 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
           .prompt({
             path: { id: newSessionId },
             body: {
-              parts: [{ type: "text", text: args.prompt }],
+              parts: [{ type: 'text', text: args.prompt }],
               agent: callerModelInfo.agent,
               model: callerModelInfo.model,
             },
@@ -319,11 +302,7 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
             // Subagent session completed - handle completion:
 
             // 1. Fetch the output from subagent session
-            const subagentOutput = await fetchSubagentOutput(
-              client,
-              newSessionId,
-              newAlias,
-            );
+            const subagentOutput = await fetchSubagentOutput(client, newSessionId, newAlias);
 
             // 1.5. Save to history for recall tool
             saveAgentToHistory(newAlias, subagentOutput);
@@ -332,7 +311,7 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
             sessionStates.set(newSessionId, {
               sessionId: newSessionId,
               alias: newAlias,
-              status: "idle",
+              status: 'idle',
               lastActivity: Date.now(),
             });
             log.info(LOG.SESSION, `Subagent session marked idle`, {
@@ -358,8 +337,7 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
 
             // 4. Pipe the subagent output to the caller
             const callerState = sessionStates.get(sessionId);
-            const callerAliasForPipe =
-              sessionToAlias.get(sessionId) || "caller";
+            const callerAliasForPipe = sessionToAlias.get(sessionId) || 'caller';
 
             log.info(LOG.TOOL, `subagent completed, still tracked for caller`, {
               callerSessionId: sessionId,
@@ -368,102 +346,64 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
             });
 
             // Create a summary message with the subagent output
-            const outputMessage = receivedSubagentOutput(
-              newAlias,
-              subagentOutput,
-            );
+            const outputMessage = receivedSubagentOutput(newAlias, subagentOutput);
 
             // Check config: true = inbox mode (forced attention), false = user message mode
             const useInboxMode = isSubagentResultForcedAttention();
 
             if (useInboxMode) {
               // Inbox mode: output appears in synthetic broadcast injection
-              if (callerState?.status === "idle") {
+              if (callerState?.status === 'idle') {
                 // Caller is idle - resume with the output via broadcast
-                log.info(
-                  LOG.TOOL,
-                  `Piping subagent output to idle caller via broadcast resume`,
-                  {
-                    callerSessionId: sessionId,
-                    callerAlias: callerAliasForPipe,
-                    subagentAlias: newAlias,
-                  },
-                );
-                resumeSessionWithBroadcast(
-                  sessionId,
-                  newAlias,
-                  outputMessage,
-                ).catch((e) =>
-                  log.error(
-                    LOG.TOOL,
-                    `Failed to pipe subagent output to caller`,
-                    {
-                      error: String(e),
-                    },
-                  ),
+                log.info(LOG.TOOL, `Piping subagent output to idle caller via broadcast resume`, {
+                  callerSessionId: sessionId,
+                  callerAlias: callerAliasForPipe,
+                  subagentAlias: newAlias,
+                });
+                resumeSessionWithBroadcast(sessionId, newAlias, outputMessage).catch((e) =>
+                  log.error(LOG.TOOL, `Failed to pipe subagent output to caller`, {
+                    error: String(e),
+                  }),
                 );
               } else {
                 // Caller is still active - add to inbox for next synthetic injection
-                log.info(
-                  LOG.TOOL,
-                  `Piping subagent output to active caller via inbox`,
-                  {
-                    callerSessionId: sessionId,
-                    callerAlias: callerAliasForPipe,
-                    subagentAlias: newAlias,
-                  },
-                );
+                log.info(LOG.TOOL, `Piping subagent output to active caller via inbox`, {
+                  callerSessionId: sessionId,
+                  callerAlias: callerAliasForPipe,
+                  subagentAlias: newAlias,
+                });
                 sendMessage(newAlias, sessionId, outputMessage);
               }
             } else {
               // User message mode: output injected as resumePrompt via session.before_complete
               // NOTE: This currently waits until caller finishes current work - see TODO
-              log.info(
-                LOG.TOOL,
-                `Storing subagent output for user message injection`,
-                {
-                  callerSessionId: sessionId,
-                  callerAlias: callerAliasForPipe,
-                  subagentAlias: newAlias,
-                },
-              );
-              resumeWithSubagentOutput(
-                sessionId,
-                newAlias,
-                subagentOutput,
-              ).catch((e) =>
-                log.error(
-                  LOG.TOOL,
-                  `Failed to store subagent output for user message`,
-                  {
-                    error: String(e),
-                  },
-                ),
+              log.info(LOG.TOOL, `Storing subagent output for user message injection`, {
+                callerSessionId: sessionId,
+                callerAlias: callerAliasForPipe,
+                subagentAlias: newAlias,
+              });
+              resumeWithSubagentOutput(sessionId, newAlias, subagentOutput).catch((e) =>
+                log.error(LOG.TOOL, `Failed to store subagent output for user message`, {
+                  error: String(e),
+                }),
               );
             }
 
             // 5. Check for unread messages and resume subagent session if needed
             const unreadMessages = getMessagesNeedingResume(newSessionId);
             if (unreadMessages.length > 0) {
-              log.info(
-                LOG.SESSION,
-                `Subagent session has unread messages, resuming`,
-                {
-                  newSessionId,
-                  newAlias,
-                  unreadCount: unreadMessages.length,
-                },
-              );
+              log.info(LOG.SESSION, `Subagent session has unread messages, resuming`, {
+                newSessionId,
+                newAlias,
+                unreadCount: unreadMessages.length,
+              });
               const firstUnread = unreadMessages[0];
               markMessagesAsPresented(newSessionId, [firstUnread.msgIndex]);
-              resumeSessionWithBroadcast(
-                newSessionId,
-                firstUnread.from,
-                firstUnread.body,
-              ).catch((e) =>
-                log.error(LOG.SESSION, `Failed to resume subagent session`, {
-                  error: String(e),
-                }),
+              resumeSessionWithBroadcast(newSessionId, firstUnread.from, firstUnread.body).catch(
+                (e) =>
+                  log.error(LOG.SESSION, `Failed to resume subagent session`, {
+                    error: String(e),
+                  }),
               );
             }
           })

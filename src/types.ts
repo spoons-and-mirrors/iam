@@ -37,9 +37,7 @@ export interface CachedParentId {
 /** Minimal interface for OpenCode SDK client session API */
 export interface OpenCodeSessionClient {
   session: {
-    get: (params: {
-      path: { id: string };
-    }) => Promise<{ data?: { parentID?: string } }>;
+    get: (params: { path: { id: string } }) => Promise<{ data?: { parentID?: string } }>;
     create: (params: {
       body?: { parentID?: string; title?: string };
     }) => Promise<{ data?: { id: string } }>;
@@ -157,7 +155,7 @@ export interface ConfigTransformOutput {
 export interface SessionState {
   sessionId: string;
   alias: string;
-  status: "active" | "idle";
+  status: 'active' | 'idle';
   lastActivity: number;
 }
 
