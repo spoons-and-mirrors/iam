@@ -2,7 +2,7 @@
 // Core messaging functions
 // =============================================================================
 
-import type { Message } from "./types";
+import type { Message, InternalClient } from "./types";
 import type { ParallelAgent, HandledMessage } from "./prompt";
 import { log, LOG } from "./logger";
 import {
@@ -210,32 +210,31 @@ ${subagentOutput}
   const storedClient = getStoredClient();
   if (storedClient) {
     try {
-      await storedClient.session.prompt({
-        path: { id: recipientSessionId },
-        body: {
-          noReply: true,
-          parts: [{ type: "text", text: formattedOutput }],
-        } as unknown as {
-          parts: Array<{ type: string; text: string }>;
-          noReply: boolean;
-        },
-      });
+      const internalClient = (
+        storedClient as unknown as { _client?: InternalClient }
+      )._client;
+      if (internalClient?.post) {
+        await internalClient.post({
+          url: `/session/${recipientSessionId}/tool`,
+          body: {
+            tool: "subagent",
+            title: `Subagent ${senderAlias} completed`,
+            output: formattedOutput,
+          },
+        });
 
-      log.info(
-        LOG.MESSAGE,
-        `Injected subagent output as persisted user message`,
-        {
+        log.info(LOG.MESSAGE, `Injected subagent output as tool message`, {
           recipientSessionId,
           recipientAlias,
           senderAlias,
-        },
-      );
+        });
 
-      return true;
+        return true;
+      }
     } catch (e) {
       log.warn(
         LOG.MESSAGE,
-        `Failed to persist subagent output, falling back to pending injection`,
+        `Failed to persist subagent tool output, falling back to pending injection`,
         {
           recipientSessionId,
           recipientAlias,
