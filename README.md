@@ -137,7 +137,7 @@ sequenceDiagram
 
     A->>A: Completes task, goes idle
 
-    B->>A: broadcast(message="Question?")
+    B->>A: broadcast(send_to="agentA", message="Question?")
     Note over A: Message arrives while idle
 
     A->>A: Resumed automatically
@@ -174,6 +174,8 @@ Messages appear as synthetic `broadcast` tool results:
 - **`synthetic: true`** — Injected by Pocket Universe, not a real tool call
 - **`agents`** — All sibling agents and their status history (array of status updates)
 - **`messages`** — Inbox messages, reply using `reply_to`
+
+**Reply audit trail:** When you reply using `reply_to`, the tool output includes the FULL original message you're replying to, providing a complete audit trail.
 
 </details>
 
@@ -363,28 +365,6 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
   "spawn": false,
   "logging": false,
   "spawn_result_forced_attention": true,
-}
-```
-
-**Full isolation with worktrees:**
-
-```jsonc
-{
-  "worktree": true,
-  "spawn": true,
-  "logging": true,
-  "spawn_result_forced_attention": false,
-}
-```
-
-**Simple parallel work (no spawn, no worktrees):**
-
-```jsonc
-{
-  "worktree": false,
-  "spawn": false,
-  "logging": false,
-  "spawn_result_forced_attention": false,
 }
 ```
 
