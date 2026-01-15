@@ -56,14 +56,11 @@ export function broadcastResult(
   }
 
   // Combined reply confirmation (when using reply_to)
+  // Include FULL source message for audit trail
   if (handledMessage) {
     lines.push(``);
-    const preview =
-      handledMessage.body.length > 80
-        ? handledMessage.body.substring(0, 80) + "..."
-        : handledMessage.body;
     lines.push(`Replied to #${handledMessage.id} from ${handledMessage.from}:`);
-    lines.push(`  "${preview}"`);
+    lines.push(`  "${handledMessage.body}"`);
   } else if (recipients.length > 0) {
     // Regular message (no reply_to)
     lines.push(``);

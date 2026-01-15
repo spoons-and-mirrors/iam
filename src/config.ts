@@ -13,10 +13,16 @@ import * as os from "os";
 export interface PocketUniverseConfig {
   /** Enable isolated git worktrees for each agent (default: false) */
   worktree: boolean;
-  /** Enable the spawn tool for creating sibling agents (default: false) */
+  /** Enable the spawn tool for creating sibling agents (default: true) */
   spawn: boolean;
   /** Enable debug logging to .logs/pocket-universe.log (default: false) */
   logging: boolean;
+  /**
+   * When true (default), spawn results appear in the broadcast inbox
+   * via synthetic injection. When false, spawn results are injected
+   * as a persisted user message, forcing immediate LLM attention.
+   */
+  spawn_result_forced_attention: boolean;
 }
 
 // ============================================================================
@@ -27,6 +33,7 @@ const DEFAULT_CONFIG: PocketUniverseConfig = {
   worktree: false,
   spawn: true,
   logging: false,
+  spawn_result_forced_attention: true,
 };
 
 // ============================================================================
@@ -187,6 +194,13 @@ export function isLoggingEnabled(): boolean {
 }
 
 /**
+ * Check if spawn result forced attention mode is enabled
+ */
+export function isSpawnResultForcedAttention(): boolean {
+  return loadConfig().spawn_result_forced_attention;
+}
+
+/**
  * Get the config file path that was used (or would be used)
  */
 export function getConfigPath(): string | null {
@@ -212,7 +226,11 @@ export function getConfigTemplate(): string {
   "spawn": true,
 
   // Enable debug logging to .logs/pocket-universe.log
-  "logging": false
+  "logging": false,
+
+  // When true (default), spawn results appear in broadcast inbox.
+  // When false, spawn results are injected as persisted user message.
+  "spawn_result_forced_attention": true
 }
 `;
 }

@@ -243,11 +243,12 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
 
 ### Feature Flags
 
-| Flag       | Default | Description                                                             |
-| ---------- | ------- | ----------------------------------------------------------------------- |
-| `worktree` | `false` | Create isolated git worktrees for each agent                            |
-| `spawn`    | `true`  | Enable the `spawn` tool for creating sibling agents                     |
-| `logging`  | `false` | Write debug logs to `~/.config/opencode/plugin/iam/pocket-universe.log` |
+| Flag                            | Default | Description                                                                                        |
+| ------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `worktree`                      | `false` | Create isolated git worktrees for each agent                                                       |
+| `spawn`                         | `true`  | Enable the `spawn` tool for creating sibling agents                                                |
+| `logging`                       | `false` | Write debug logs to `~/.config/opencode/plugin/iam/pocket-universe.log`                            |
+| `spawn_result_forced_attention` | `true`  | When true, spawn output appears in broadcast inbox; when false, injected as persisted user message |
 
 ### Behavior When Disabled
 
@@ -268,6 +269,19 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
 - No log file is created
 - Reduces disk I/O
 
+**`spawn_result_forced_attention: true`** (default)
+
+- Spawn output appears in the broadcast inbox (synthetic injection)
+- Message is replyable via `reply_to`
+- Not persisted to database (memory only)
+
+**`spawn_result_forced_attention: false`**
+
+- Spawn output is injected as a persisted user message
+- Forces immediate LLM attention and persists to database
+- Resume prompt shows: `[Received subagent results: resuming session...]`
+- Not replyable (it's a user message, not a broadcast)
+
 ### Example Configurations
 
 **Minimal setup (no worktrees, no logging):**
@@ -277,6 +291,7 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
   "worktree": false,
   "spawn": true,
   "logging": false,
+  "spawn_result_forced_attention": true,
 }
 ```
 
@@ -287,6 +302,7 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
   "worktree": true,
   "spawn": true,
   "logging": true,
+  "spawn_result_forced_attention": true,
 }
 ```
 
@@ -297,6 +313,29 @@ Pocket Universe uses feature flags to control optional functionality. Configurat
   "worktree": false,
   "spawn": false,
   "logging": false,
+  "spawn_result_forced_attention": true,
+}
+```
+
+**Full isolation with worktrees:**
+
+```jsonc
+{
+  "worktree": true,
+  "spawn": true,
+  "logging": true,
+  "spawn_result_forced_attention": false,
+}
+```
+
+**Simple parallel work (no spawn, no worktrees):**
+
+```jsonc
+{
+  "worktree": false,
+  "spawn": false,
+  "logging": false,
+  "spawn_result_forced_attention": false,
 }
 ```
 

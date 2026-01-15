@@ -1,0 +1,10 @@
+temp/
+.app/
+.logs/
+.opencode/
+dist/
+docs/
+.npmignore
+.prettierrc
+*.lock
+*.webp

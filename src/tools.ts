@@ -36,6 +36,7 @@ import {
 import {
   sendMessage,
   resumeSessionWithBroadcast,
+  resumeWithSpawnOutput,
   getMessagesNeedingResume,
   markMessagesAsHandled,
   markMessagesAsPresented,
@@ -48,7 +49,7 @@ import {
 } from "./messaging";
 import type { InternalClient } from "./types";
 import { createAgentWorktree, removeAgentWorktree } from "./worktree";
-import { isWorktreeEnabled } from "./config";
+import { isWorktreeEnabled, isSpawnResultForcedAttention } from "./config";
 
 // ============================================================================
 // Broadcast Tool
@@ -543,10 +544,34 @@ export function createSpawnTool(client: OpenCodeSessionClient) {
             });
 
             // Create a summary message with the spawn output
-            const outputMessage = `[Spawn completed: ${newAlias}]\n${spawnOutput}`;
+            const outputMessage = `[Received ${newAlias} completed task]\n${spawnOutput}`;
 
-            if (callerState?.status === "idle") {
-              // Caller is idle - resume with the output
+            // Check if forced attention mode is enabled (flag false = forced attention)
+            const useForcedAttention = !isSpawnResultForcedAttention();
+
+            if (useForcedAttention) {
+              // Forced attention: inject spawn output as persisted user message
+              log.info(
+                LOG.TOOL,
+                `Piping spawn output via forced attention (persisted user message)`,
+                {
+                  callerSessionId: sessionId,
+                  callerAlias: callerAliasForPipe,
+                  spawnAlias: newAlias,
+                },
+              );
+              resumeWithSpawnOutput(sessionId, newAlias, spawnOutput).catch(
+                (e) =>
+                  log.error(
+                    LOG.TOOL,
+                    `Failed to pipe spawn output (forced attention)`,
+                    {
+                      error: String(e),
+                    },
+                  ),
+              );
+            } else if (callerState?.status === "idle") {
+              // Caller is idle - resume with the output via message queue
               log.info(
                 LOG.TOOL,
                 `Piping spawn output to idle caller via resume`,
