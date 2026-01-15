@@ -11,7 +11,11 @@ import type {
   OpenCodeSessionClient,
 } from './types';
 import { log, LOG } from './logger';
-import { RECALL_AGENT_ACTIVE, RECALL_AGENT_IDLE_NO_OUTPUT } from './prompts/recall.prompts';
+import {
+  RECALL_AGENT_ACTIVE,
+  RECALL_AGENT_IDLE_NO_OUTPUT,
+  RECALL_NO_STATUS_UPDATES,
+} from './prompts/recall.prompts';
 import { isRecallCrossPocket } from './config';
 
 // ============================================================================
@@ -145,7 +149,8 @@ export function recallAgents(
       output?: string;
     } = {
       name: record.alias,
-      status_history: record.statusHistory,
+      status_history:
+        record.statusHistory.length > 0 ? record.statusHistory : [RECALL_NO_STATUS_UPDATES],
       state: 'completed',
     };
     if (includeOutput) {
@@ -171,7 +176,7 @@ export function recallAgents(
       output?: string;
     } = {
       name: alias,
-      status_history: statusHistory,
+      status_history: statusHistory.length > 0 ? statusHistory : [RECALL_NO_STATUS_UPDATES],
       state,
     };
     if (includeOutput) {

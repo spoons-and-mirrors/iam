@@ -16,3 +16,4 @@ export const RECALL_EMPTY = `No agents in history yet.`;
 
 export const RECALL_AGENT_ACTIVE = `[Agent is still active - no output yet]`;
 export const RECALL_AGENT_IDLE_NO_OUTPUT = `[Agent is idle but has not produced output yet]`;
+export const RECALL_NO_STATUS_UPDATES = `[No status updates]`;
