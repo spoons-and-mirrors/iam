@@ -16,9 +16,10 @@
     "README.md"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node --format esm --external '@opencode-ai/plugin' && tsc --emitDeclarationOnly",
+    "build": "bun run build:script",
     "prepublishOnly": "bun run build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:script": "bun build.mjs"
   },
   "keywords": [
     "opencode",
