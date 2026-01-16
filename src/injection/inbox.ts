@@ -28,7 +28,7 @@ export function createInboxMessage(
   const outputData: {
     you_are: string;
     hint?: string;
-    agents?: Array<{ name: string; status?: string[]; worktree?: string }>;
+    agents?: Array<{ name: string; status?: string[]; worktree?: string; idle?: boolean }>;
     messages?: Array<{ id: number; from: string; content: string }>;
   } = {
     you_are: selfAlias,
@@ -45,6 +45,7 @@ export function createInboxMessage(
       name: agent.alias,
       status: agent.description, // Now an array of status updates
       worktree: agent.worktree,
+      idle: agent.idle, // True if agent has completed
     }));
   }
 

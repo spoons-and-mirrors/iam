@@ -10,6 +10,7 @@ export interface ParallelAgent {
   alias: string;
   description?: string[]; // Status history (most recent last)
   worktree?: string; // Isolated working directory path
+  idle?: boolean; // True if agent has completed and is idle
 }
 
 export interface HandledMessage {

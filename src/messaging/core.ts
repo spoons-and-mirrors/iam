@@ -14,6 +14,7 @@ import {
   getInbox,
   MAX_INBOX_SIZE,
   getWorktree,
+  sessionStates,
 } from '../state';
 import { isWorktreeEnabled } from '../config';
 
@@ -127,11 +128,16 @@ export function getParallelAgents(sessionId: string): ParallelAgent[] {
     // All registered sessions are child sessions (we check parentID before registering)
     // Just exclude self
     if (alias !== selfAlias) {
+      // Check if agent is idle (completed)
+      const state = sessionStates.get(sessId);
+      const isIdle = state?.status === 'idle';
+
       agents.push({
         alias,
         description: getDescription(alias),
         // Only include worktree if feature is enabled
         worktree: isWorktreeEnabled() ? getWorktree(sessId) : undefined,
+        idle: isIdle || undefined, // Only include if true
       });
     }
   }
