@@ -25,6 +25,8 @@ import {
   setWorktree,
   getWorktree,
   saveAgentToHistory,
+  getVirtualDepth,
+  setVirtualDepth,
 } from '../state';
 import {
   sendMessage,
@@ -35,7 +37,6 @@ import {
 } from '../messaging';
 import {
   getParentId,
-  getSessionDepth,
   injectTaskPartToParent,
   fetchSubagentOutput,
   markSubagentCompleted,
@@ -157,15 +158,16 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
         return SUBAGENT_NOT_CHILD_SESSION;
       }
 
-      const depth = await getSessionDepth(client, sessionId);
+      // Use virtual depth for spawn chain tracking (not actual session hierarchy)
+      const callerDepth = getVirtualDepth(sessionId);
       const maxDepth = getMaxSubagentDepth();
-      if (depth >= maxDepth) {
+      if (callerDepth >= maxDepth) {
         log.warn(LOG.TOOL, `subagent max depth reached`, {
           sessionId,
-          depth,
+          callerDepth,
           maxDepth,
         });
-        return subagentMaxDepth(depth, maxDepth);
+        return subagentMaxDepth(callerDepth, maxDepth);
       }
 
       const callerAlias = getAlias(sessionId);
@@ -173,13 +175,13 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
 
       log.info(LOG.TOOL, `subagent called`, {
         callerAlias,
-        parentId,
+        callerDepth,
         descriptionLength: description.length,
         promptLength: args.prompt.length,
       });
 
       try {
-        // Create a sibling session (child of the same parent as caller)
+        // Create a sibling session (child of same parent, not nested)
         const createResult = await client.session.create({
           body: {
             parentID: parentId,
@@ -199,6 +201,10 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
         registerSession(newSessionId);
         const newAlias = getAlias(newSessionId);
 
+        // Set virtual depth for the new subagent (caller's depth + 1)
+        const newDepth = callerDepth + 1;
+        setVirtualDepth(newSessionId, newDepth);
+
         // Create isolated worktree for this agent (if enabled and in a git repo)
         if (isWorktreeEnabled()) {
           const worktreePath = await createAgentWorktree(newAlias, process.cwd());
@@ -212,6 +218,7 @@ export function createSubagentTool(client: OpenCodeSessionClient) {
           newAlias,
           newSessionId,
           parentId,
+          newDepth,
         });
 
         // Inject task part into parent session BEFORE starting

@@ -59,13 +59,13 @@ export async function isChildSession(
 }
 
 /**
- * Get the depth of a session in the tree (main session = 1).
+ * Get the depth of a session in the tree (main session = 0).
  */
 export async function getSessionDepth(
   client: OpenCodeSessionClient,
   sessionId: string,
 ): Promise<number> {
-  let depth = 1;
+  let depth = 0;
   let currentId: string | null = sessionId;
 
   while (currentId) {

@@ -269,6 +269,31 @@ export const cleanedUpSessions = new Set<string>();
 export const pendingSubagentOutputs = new Map<string, { senderAlias: string; output: string }>();
 
 // ============================================================================
+// Virtual Depth Tracking (for spawn chain limits without actual nesting)
+// ============================================================================
+
+// Map sessionId -> virtual depth (0 = main, 1 = first-level child, 2 = spawned by level 1, etc.)
+export const sessionVirtualDepth = new Map<string, number>();
+
+/**
+ * Get virtual depth for a session.
+ * Returns 1 for first-level children (spawned by main via task tool).
+ * Returns stored depth for subagent-spawned sessions.
+ */
+export function getVirtualDepth(sessionId: string): number {
+  return sessionVirtualDepth.get(sessionId) ?? 1; // Default to 1 for first-level children
+}
+
+/**
+ * Set virtual depth for a session.
+ * Called when creating a new subagent with the spawner's depth + 1.
+ */
+export function setVirtualDepth(sessionId: string, depth: number): void {
+  sessionVirtualDepth.set(sessionId, depth);
+  log.info(LOG.SESSION, `Virtual depth set`, { sessionId, depth });
+}
+
+// ============================================================================
 // Worktree Tracking (isolated working directories per agent)
 // ============================================================================
 
@@ -510,6 +535,7 @@ export function cleanupCompletedAgents(): void {
     inboxes: inboxes.size,
     announced: announcedSessions.size,
     worktrees: sessionWorktrees.size,
+    virtualDepths: sessionVirtualDepth.size,
     sessionStates: sessionStates.size,
     childCache: childSessionCache.size,
     presentedMsgs: presentedMessages.size,
@@ -536,6 +562,7 @@ export function cleanupCompletedAgents(): void {
   sessionMsgCounter.clear();
   announcedSessions.clear();
   sessionWorktrees.clear();
+  sessionVirtualDepth.clear();
   sessionStates.clear();
   childSessionCache.clear();
   presentedMessages.clear();

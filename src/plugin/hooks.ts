@@ -29,6 +29,7 @@ import {
   setWorktree,
   setCurrentPocketId,
   getCurrentPocketId,
+  getVirtualDepth,
 } from '../state';
 import {
   resumeSessionWithBroadcast,
@@ -39,7 +40,6 @@ import {
 } from '../messaging';
 import {
   getParentId,
-  getSessionDepth,
   isChildSession,
   createInboxMessage,
   createSubagentTaskMessage,
@@ -547,7 +547,8 @@ export function createHooks(client: OpenCodeSessionClient) {
         }
       }
 
-      const depth = await getSessionDepth(client, sessionId);
+      // Use virtual depth for spawn chain tracking (siblings in hierarchy, virtual nesting for limits)
+      const depth = getVirtualDepth(sessionId);
       const maxDepth = getMaxSubagentDepth();
       const allowSubagent = depth < maxDepth;
 

@@ -27,8 +27,8 @@ export interface PocketUniverseConfig {
   /** Tool configuration parameters */
   parameters: {
     /**
-     * Max subagent nesting depth (main session = 1).
-     * At max depth, subagent tool cannot spawn more subagents.
+     * Max session depth allowed to spawn subagents (main session = 0).
+     * Sessions at or deeper than this cannot call the subagent tool.
      */
     subagent_max_depth: number;
     /**
@@ -231,11 +231,11 @@ export function isLoggingEnabled(): boolean {
 }
 
 /**
- * Get max subagent nesting depth (minimum 1)
+ * Get max subagent nesting depth (minimum 0)
  */
 export function getMaxSubagentDepth(): number {
   const depth = Number(loadConfig().parameters.subagent_max_depth);
-  return Number.isFinite(depth) && depth >= 1 ? depth : 1;
+  return Number.isFinite(depth) && depth >= 0 ? depth : 0;
 }
 
 /**
@@ -283,7 +283,7 @@ export function getConfigTemplate(): string {
 
   // Tool configuration parameters
   "parameters": {
-    // Max subagent nesting depth (main session = 1)
+    // Max session depth allowed to spawn subagents (main session = 0)
     "subagent_max_depth": 3,
 
     // When true (default), subagent results appear in broadcast inbox.
